@@ -66,8 +66,12 @@ describe('BIBLE_STORIES catalog', () => {
 });
 
 describe('STORY_CATEGORIES', () => {
-  it('contains 5 categories', () => {
-    expect(STORY_CATEGORIES).toHaveLength(5);
+  it('contains 6 categories', () => {
+    expect(STORY_CATEGORIES).toHaveLength(6);
+  });
+
+  it('Holiday Stories is the first category', () => {
+    expect(STORY_CATEGORIES[0]).toBe('Holiday Stories');
   });
 
   it('has no duplicates', () => {
@@ -125,7 +129,7 @@ describe('getRandomStory', () => {
     for (let i = 0; i < 50; i++) {
       results.add(getRandomStory().id);
     }
-    // With 66 stories and 50 calls, we should get at least 2 different results
+    // With 71 stories and 50 calls, we should get at least 2 different results
     expect(results.size).toBeGreaterThan(1);
   });
 });

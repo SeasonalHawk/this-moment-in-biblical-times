@@ -9,6 +9,7 @@
  */
 
 export const STORY_CATEGORIES = [
+  'Holiday Stories',
   'Old Testament Adventures',
   'New Testament Stories',
   'Parables & Teachings',
@@ -47,8 +48,9 @@ export interface BibleStory {
 }
 
 /**
- * 66 Bible stories suitable for bedtime reading to children ages 6-12.
+ * 71 Bible stories suitable for bedtime reading to children ages 6-12.
  * Ordered roughly chronologically within each testament.
+ * Holiday Stories follow the liturgical calendar (Advent → Pentecost).
  */
 export const BIBLE_STORIES: BibleStory[] = [
   // ── Old Testament Adventures ──────────────────────────────────────
@@ -305,24 +307,53 @@ export const BIBLE_STORIES: BibleStory[] = [
     teaser: 'Run from God and end up in the belly of something enormous.',
   },
 
+  // ── Holiday Stories (Liturgical Calendar) ────────────────────────
+  {
+    id: 'angel-visits-mary',
+    title: 'The Angel Visits Mary',
+    testament: 'New Testament',
+    category: 'Holiday Stories',
+    themes: ['Faith', 'Obedience', 'Hope'],
+    scriptureRef: 'Luke 1:26–38',
+    teaser: 'An angel appears with an impossible message — and a young woman says yes.',
+  },
+
   // ── New Testament Stories ─────────────────────────────────────────
   {
     id: 'birth-of-jesus',
     title: 'The Birth of Jesus',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Love', 'Hope', 'Gratitude'],
     scriptureRef: 'Luke 2:1-20',
     teaser: 'A stable, a manger, and a sky full of singing angels.',
   },
   {
+    id: 'shepherds-and-angels',
+    title: 'The Shepherds and the Angels',
+    testament: 'New Testament',
+    category: 'Holiday Stories',
+    themes: ['Hope', 'Love', 'Gratitude'],
+    scriptureRef: 'Luke 2:8–20',
+    teaser: 'On a quiet hillside, the sky explodes with angels singing glory to God.',
+  },
+  {
     id: 'wise-men',
     title: 'The Wise Men Follow the Star',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Faith', 'Wisdom', 'Perseverance'],
     scriptureRef: 'Matthew 2:1-12',
     teaser: 'Travelers from the East follow a star to find a king in the humblest place.',
+  },
+  {
+    id: 'simeon-and-anna',
+    title: 'Simeon and Anna at the Temple',
+    testament: 'New Testament',
+    category: 'Holiday Stories',
+    themes: ['Faith', 'Hope', 'Patience'],
+    scriptureRef: 'Luke 2:22–40',
+    teaser: 'Two faithful elders have waited their whole lives — and today the promise arrives.',
   },
   {
     id: 'boy-jesus-temple',
@@ -346,7 +377,7 @@ export const BIBLE_STORIES: BibleStory[] = [
     id: 'jesus-temptation',
     title: 'Jesus in the Wilderness',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Courage', 'Faith', 'Perseverance'],
     scriptureRef: 'Matthew 4:1-11',
     teaser: 'Forty days alone in the desert, tested three times by the tempter.',
@@ -517,7 +548,7 @@ export const BIBLE_STORIES: BibleStory[] = [
     id: 'triumphal-entry',
     title: 'The Triumphal Entry',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Love', 'Hope'],
     scriptureRef: 'Matthew 21:1-11',
     teaser: 'Palm branches wave and crowds shout Hosanna as a humble donkey carries a king.',
@@ -526,25 +557,43 @@ export const BIBLE_STORIES: BibleStory[] = [
     id: 'last-supper',
     title: 'The Last Supper',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Love', 'Kindness', 'Gratitude'],
     scriptureRef: 'Matthew 26:17-30',
     teaser: 'A final meal, broken bread, and a promise to remember.',
   },
   {
+    id: 'foot-washing',
+    title: 'Jesus Washes the Disciples\' Feet',
+    testament: 'New Testament',
+    category: 'Holiday Stories',
+    themes: ['Love', 'Kindness', 'Obedience'],
+    scriptureRef: 'John 13:1–17',
+    teaser: 'The king of everything kneels down and washes the dusty feet of his friends.',
+  },
+  {
     id: 'garden-gethsemane',
     title: 'The Garden of Gethsemane',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Courage', 'Faith', 'Love'],
     scriptureRef: 'Matthew 26:36-46',
     teaser: 'Alone in the garden, praying through the hardest night.',
   },
   {
+    id: 'crucifixion',
+    title: 'The Crucifixion of Jesus',
+    testament: 'New Testament',
+    category: 'Holiday Stories',
+    themes: ['Love', 'Courage', 'Hope'],
+    scriptureRef: 'Luke 23:26–49',
+    teaser: 'The darkest day — when love carried the heaviest weight of all.',
+  },
+  {
     id: 'resurrection',
     title: 'The Resurrection',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Hope', 'Love', 'Faith'],
     scriptureRef: 'Matthew 28:1-10; John 20:1-18',
     teaser: 'The stone is rolled away. The tomb is empty. He is risen.',
@@ -553,7 +602,7 @@ export const BIBLE_STORIES: BibleStory[] = [
     id: 'road-to-emmaus',
     title: 'The Road to Emmaus',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Hope', 'Faith', 'Wisdom'],
     scriptureRef: 'Luke 24:13-35',
     teaser: 'Two travelers walk with a stranger — and their hearts begin to burn.',
@@ -571,7 +620,7 @@ export const BIBLE_STORIES: BibleStory[] = [
     id: 'ascension',
     title: 'The Ascension of Jesus',
     testament: 'New Testament',
-    category: 'New Testament Stories',
+    category: 'Holiday Stories',
     themes: ['Hope', 'Faith'],
     scriptureRef: 'Acts 1:6-11',
     teaser: 'He rises into the clouds, and two messengers say: He will come back.',
@@ -580,10 +629,19 @@ export const BIBLE_STORIES: BibleStory[] = [
     id: 'pentecost',
     title: 'The Day of Pentecost',
     testament: 'New Testament',
-    category: 'Miracles & Wonders',
+    category: 'Holiday Stories',
     themes: ['Courage', 'Faith', 'Hope'],
     scriptureRef: 'Acts 2:1-41',
     teaser: 'Wind fills the room, flames appear, and suddenly everyone speaks in tongues.',
+  },
+  {
+    id: 'transfiguration',
+    title: 'The Transfiguration',
+    testament: 'New Testament',
+    category: 'Holiday Stories',
+    themes: ['Faith', 'Hope', 'Wisdom'],
+    scriptureRef: 'Matthew 17:1–9',
+    teaser: 'On a mountaintop, Jesus shines brighter than the sun — and Moses and Elijah appear.',
   },
   {
     id: 'peter-heals-lame-man',
