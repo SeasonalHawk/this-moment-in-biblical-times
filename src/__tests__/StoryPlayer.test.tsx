@@ -110,6 +110,20 @@ describe('StoryPlayer', () => {
     expect(screen.queryByLabelText('Close')).not.toBeInTheDocument();
   });
 
+  it('close control is not a <button> to avoid nested button hydration error', () => {
+    render(<StoryPlayer {...defaultProps} spinning={false} />);
+    const closeEl = screen.getByLabelText('Close');
+    expect(closeEl.tagName).not.toBe('BUTTON');
+    expect(closeEl.getAttribute('role')).toBe('button');
+  });
+
+  it('close control responds to Enter key', () => {
+    const onClose = vi.fn();
+    render(<StoryPlayer {...defaultProps} onClose={onClose} />);
+    fireEvent.keyDown(screen.getByLabelText('Close'), { key: 'Enter' });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   // Audio controls — no audio state
   it('does not show audio controls when no audio', () => {
     render(<StoryPlayer {...defaultProps} />);
