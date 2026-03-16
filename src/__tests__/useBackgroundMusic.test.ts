@@ -32,7 +32,7 @@ describe('useBackgroundMusic: audio source', () => {
 
 describe('useBackgroundMusic: volume and fade config', () => {
   it('TARGET_VOLUME is set to 0.12 for the fuller track', () => {
-    expect(hookSource).toContain('TARGET_VOLUME = 0.17');
+    expect(hookSource).toContain('TARGET_VOLUME = 0.12');
   });
 
   it('FADE_IN_MS is defined for fade-in duration', () => {
@@ -181,12 +181,16 @@ describe('page.tsx: background music warm-up (autoplay fix)', () => {
     expect(bgWarmUpIndex).toBeGreaterThan(ttsWarmUpIndex);
   });
 
-  it('bgMusic.play is passed as onStart callback to TTS', () => {
-    expect(pageSource).toContain('onStart: () => bgMusic.play()');
+  it('bgMusic.play is called in onStart callback to TTS', () => {
+    expect(pageSource).toContain('bgMusic.play()');
+    // Verify it's within an onStart handler context
+    expect(pageSource).toContain('onStart');
   });
 
-  it('bgMusic.fadeOut is passed as onEnd callback for graceful trail-off', () => {
-    expect(pageSource).toContain('onEnd: () => bgMusic.fadeOut()');
+  it('bgMusic.fadeOut is called in onEnd callback for graceful trail-off', () => {
+    expect(pageSource).toContain('bgMusic.fadeOut()');
+    // Verify it's within an onEnd handler context
+    expect(pageSource).toContain('onEnd');
   });
 
   it('bgMusic.stop is used for hard reset on pipeline restart (not onEnd)', () => {

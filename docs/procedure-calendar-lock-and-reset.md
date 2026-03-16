@@ -1,14 +1,14 @@
-# Procedure: Calendar Lock & Story Card Reset Pattern
+# Procedure: Selector Lock & Content Card Reset Pattern
 
-> Portable pattern for locking a date picker during async pipelines and providing a full app reset via a closeable content card.
+> Portable pattern for locking a selector/picker during async pipelines and providing a full app reset via a closeable content card.
 
 ---
 
 ## Problem
 
-In apps that run expensive async pipelines (API calls, AI generation, TTS, etc.) triggered by a date/item selection:
+In apps that run expensive async pipelines (API calls, AI generation, TTS, etc.) triggered by a selection (date, story, item):
 
-1. **Rapid clicks waste resources** — users can fire multiple pipelines by clicking dates while one is running
+1. **Rapid clicks waste resources** — users can fire multiple pipelines by clicking while one is running
 2. **No way to start over** — once content loads, the user is stuck without a clear path to reset
 3. **Stale state leaks** — audio keeps playing, old content persists, or loading indicators get stuck when switching context
 
@@ -18,26 +18,26 @@ Two complementary mechanisms:
 
 | Mechanism | Purpose |
 |-----------|---------|
-| **Calendar Lock** | Disables the picker reactively based on active pipeline/playback state signals |
+| **Selector Lock** | Disables the picker/buttons reactively based on active pipeline/playback state signals |
 | **Close Button + Full Reset** | Lets the user dismiss loaded content and return to the initial empty state |
 
 ---
 
-## Part 1: Calendar Lock (Reactive Disable)
+## Part 1: Selector Lock (Reactive Disable)
 
 ### Concept
 
-The calendar/picker component accepts a `disabled` prop. Instead of a single boolean flag, compose multiple state signals with `||` so the picker locks whenever *any* active process is running.
+The selector component (calendar, story card, button) accepts a `disabled` prop. Instead of a single boolean flag, compose multiple state signals with `||` so the selector locks whenever *any* active process is running.
 
 ### Implementation
 
-**Picker component** — accepts a `disabled` prop and applies visual + interaction blocking:
+**Selector component** — accepts a `disabled` prop and applies visual + interaction blocking:
 
 ```tsx
-// CalendarPicker.tsx (or any picker/selector component)
+// Picker.tsx (calendar, story card, or any selector component)
 interface PickerProps {
-  selected: Date | undefined;
-  onSelect: (date: Date | undefined) => void;
+  selected: string | undefined;
+  onSelect: (item: string | undefined) => void;
   disabled?: boolean;
 }
 
@@ -58,7 +58,7 @@ export default function Picker({ selected, onSelect, disabled = false }: PickerP
 
 ```tsx
 <Picker
-  selected={selectedDate}
+  selected={selectedItem}
   onSelect={handleSelect}
   disabled={
     pipelineRunning       // async pipeline in-flight
@@ -69,17 +69,17 @@ export default function Picker({ selected, onSelect, disabled = false }: PickerP
 
 ### Why Close-Gated (Not Reactive)
 
-Tying the lock to playback signals (audio.playing, audio.loading, etc.) creates coupling — every new button or feature can accidentally unlock the picker. Instead, lock the picker once content exists and only unlock via the explicit close action. This is simpler to reason about: **the close button is the single unlock mechanism**.
+Tying the lock to playback signals (audio.playing, audio.loading, etc.) creates coupling — every new button or feature can accidentally unlock the selector. Instead, lock the selector once content exists and only unlock via the explicit close action. This is simpler to reason about: **the close button is the single unlock mechanism**.
 
 ### Handler Guard (Belt + Suspenders)
 
 Even with `pointer-events-none`, add an early return in the selection handler as a safety net. This catches edge cases like programmatic triggers or accessibility tools that bypass CSS:
 
 ```tsx
-const handleSelect = async (date: Date | undefined) => {
+const handleSelect = async (item: string | undefined) => {
   if (pipelineRunning) return; // Guard against race conditions
-  setSelected(date);
-  if (date) await runPipeline(date);
+  setSelected(item);
+  if (item) await runPipeline(item);
 };
 ```
 
@@ -94,7 +94,7 @@ Add a close/dismiss button to the content card. When clicked, it aborts any in-f
 ### Content Card — Add `onClose` Prop
 
 ```tsx
-// ContentCard.tsx
+// ContentCard.tsx (e.g., StoryPlayer)
 interface ContentCardProps {
   // ... your existing props
   onClose?: () => void;
@@ -111,8 +111,8 @@ export default function ContentCard({ onClose, spinning, ...props }: ContentCard
         {onClose && !spinning && (
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-stone-500 hover:text-stone-300
-                       hover:bg-stone-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-indigo-400 hover:text-amber-50
+                       hover:bg-indigo-800 transition-colors cursor-pointer"
             title="Close and start over"
             aria-label="Close"
           >
@@ -147,12 +147,9 @@ const handleClose = () => {
   bgMusic.stop();
 
   // 3. Clear all content state back to initial values
-  contentHook.clear();           // story, metadata, genre → null
-  setSelectedDate(undefined);    // deselect picker
+  contentHook.clear();           // story, metadata → null
   setPipelineStart(null);        // clear pipeline tracking
   setPhases([]);                 // clear loading phase UI
-  setTiming({ a: null, b: null }); // clear performance metrics
-  setCostData(null);             // clear cost estimation
 };
 ```
 
@@ -165,17 +162,16 @@ When implementing your reset handler, ensure you clear **every** category:
 | **Network** | Abort in-flight requests via `AbortController` | Prevents late responses from updating cleared state |
 | **Audio** | Pause playback, revoke object URLs, null element refs | Prevents orphaned audio, memory leaks from blob URLs |
 | **Content** | Clear story/data, metadata, active filters | Returns UI to empty/initial state |
-| **Selection** | Clear selected date/item | Picker shows no selection |
-| **Pipeline** | Null out pipeline start timestamp | Unlocks the picker (reactive disable sees `null`) |
+| **Selection** | Clear selected item/story | Selector shows no selection |
+| **Pipeline** | Null out pipeline start timestamp | Unlocks the selector (reactive disable sees `null`) |
 | **UI phases** | Clear loading phase array | Removes loading progress indicators |
-| **Metrics** | Clear timing and cost data | Removes stale performance labels |
 
 ### Conditional Rendering
 
 The content card should only render when there's content to show. This means closing (which clears content) naturally removes the card from the DOM:
 
 ```tsx
-{content.story && selectedDate && (
+{content.story && (
   <ContentCard
     story={content.story}
     onClose={handleClose}
@@ -184,9 +180,9 @@ The content card should only render when there's content to show. This means clo
   />
 )}
 
-{/* Empty state — shows when nothing is selected */}
-{!selectedDate && !content.loading && (
-  <p>Select something to get started.</p>
+{/* Empty state — shows when nothing is active */}
+{!content.story && !content.loading && (
+  <TonightStoryCard story={tonightStory} onReadToMe={handleReadToMe} />
 )}
 ```
 
@@ -195,24 +191,23 @@ The content card should only render when there's content to show. This means clo
 ## Integration Sequence
 
 ```
-User picks date
-  → handleSelect fires
+User taps "Read to Me"
+  → handleReadToMe fires
   → pipelineRunning = true
-  → Calendar locks (opacity-50, pointer-events-none)
+  → Story card / buttons lock
   → Pipeline streams content → audio
   → pipelineRunning = false, content.data is set
-  → Calendar stays locked (content.data !== null)
-  → User interacts with content (play, pause, replay, download, random)
-  → Calendar remains locked through all interactions
+  → Buttons stay locked (content.data !== null)
+  → User interacts with content (play, pause, replay)
+  → Selector remains locked through all interactions
   → ONLY unlocks when user clicks X (close button)
 
 User clicks X on content card
   → handleClose fires
   → Aborts pipeline, stops audio, clears all state
-  → content.data = null → Calendar unlocks
-  → selectedDate = undefined → Calendar deselects
-  → App returns to initial "pick a date" state
-  → User can now pick a new date
+  → content.data = null → Selector unlocks
+  → App returns to initial "Tonight's Story" state
+  → User can now pick a new story
 ```
 
 ---
@@ -232,7 +227,7 @@ When adapting this pattern to a new project:
 - [ ] Verify content card conditionally renders only when content exists
 - [ ] Test: rapid clicks during pipeline are blocked
 - [ ] Test: close button resets to initial state
-- [ ] Test: calendar re-enables after audio/process completes
+- [ ] Test: selector re-enables after close
 
 ---
 
@@ -240,9 +235,10 @@ When adapting this pattern to a new project:
 
 | File | Role |
 |------|------|
-| `src/components/CalendarPicker.tsx` | Picker with `disabled` prop |
-| `src/components/StoryCard.tsx` | Content card with `onClose` + X button |
+| `src/components/TonightStoryCard.tsx` | Tonight's story with "Read to Me" button (lockable via `disabled` prop) |
+| `src/components/StoryPlayer.tsx` | Content card with `onClose` + X button |
+| `src/components/BookPreview.tsx` | Bookshelf preview overlay with "Read to Me" CTA |
 | `src/app/page.tsx` | Orchestrator: `handleCloseStory`, disabled composition |
-| `src/hooks/useHistoryStory.ts` | Content state + `setErrorState('')` for clearing |
+| `src/hooks/useBibleStory.ts` | Content state + `clear()` for resetting |
 | `src/hooks/useTextToSpeech.ts` | Audio lifecycle: `cleanup()`, `playing`, `loading` |
 | `src/hooks/useBackgroundMusic.ts` | Background audio: `stop()`, `warmUp()` |

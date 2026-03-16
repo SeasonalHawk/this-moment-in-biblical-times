@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #1e1b4b; /* indigo-950 */
+  --foreground: #fef3c7; /* amber-50/cream */
 }
 
 @theme inline {
@@ -12,15 +12,37 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Scrollbar hiding utility for Bookshelf horizontal scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Slide-up animation for BookPreview overlay */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Serif font for storybook titles — uses system serif stack */
+.font-serif {
+  font-family: Georgia, 'Times New Roman', serif;
 }

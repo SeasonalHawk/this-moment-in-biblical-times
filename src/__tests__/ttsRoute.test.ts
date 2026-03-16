@@ -82,10 +82,11 @@ describe('TTS Input Validation', () => {
 });
 
 describe('TTS Voice Settings', () => {
+  // Updated voice settings for warm bedtime narration
   const voiceSettings = {
-    stability: 0.5,
-    similarity_boost: 0.75,
-    style: 0,
+    stability: 0.6,
+    similarity_boost: 0.7,
+    style: 0.1,
   };
 
   it('stability is between 0 and 1', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { HISTORY_SYSTEM_PROMPT, VIGNETTE_TOOL, STORY_MODEL } from '@/lib/prompts';
+import { buildSystemPrompt, BIBLE_STORY_TOOL, STORY_MODEL } from '@/lib/prompts';
 
 describe('Pipeline Configuration', () => {
   const PIPELINE_TTS_MODEL = 'eleven_flash_v2_5';
@@ -19,8 +19,6 @@ describe('Pipeline Configuration', () => {
   });
 
   it('exports STORY_MODEL as single source of truth', () => {
-    // Both /api/history and /api/pipeline import STORY_MODEL from prompts.ts
-    // This test ensures the constant exists and is a non-empty string
     expect(typeof STORY_MODEL).toBe('string');
     expect(STORY_MODEL.length).toBeGreaterThan(0);
   });
@@ -34,53 +32,84 @@ describe('Pipeline Configuration', () => {
   });
 });
 
-describe('Shared System Prompt', () => {
+describe('Bible Story System Prompt', () => {
+  const prompt = buildSystemPrompt('NABRE');
+
   it('includes second-person voice rule', () => {
-    expect(HISTORY_SYSTEM_PROMPT).toContain('second person');
+    expect(prompt).toContain('second person');
   });
 
   it('includes present-tense rule', () => {
-    expect(HISTORY_SYSTEM_PROMPT).toContain('present tense');
+    expect(prompt).toContain('present tense');
   });
 
-  it('prohibits "On this day" openings', () => {
-    expect(HISTORY_SYSTEM_PROMPT).toContain('NEVER open with "On this day"');
-  });
-
-  it('targets 150-200 word vignettes', () => {
-    expect(HISTORY_SYSTEM_PROMPT).toContain('150–200 word');
+  it('targets 150-250 word stories', () => {
+    expect(prompt).toContain('150-250 word');
   });
 
   it('instructs tool use', () => {
-    expect(HISTORY_SYSTEM_PROMPT).toContain('Always use the tool');
+    expect(prompt).toContain('Always use the tool');
+  });
+
+  it('injects the Bible version into the prompt', () => {
+    const nabrePrompt = buildSystemPrompt('NABRE');
+    expect(nabrePrompt).toContain('NABRE');
+
+    const nivPrompt = buildSystemPrompt('NIV');
+    expect(nivPrompt).toContain('NIV');
+  });
+
+  it('includes bedtime tone instructions', () => {
+    expect(prompt).toContain('bedtime');
+    expect(prompt).toContain('warm');
+  });
+
+  it('includes age-appropriate audience guidance', () => {
+    expect(prompt).toContain('6-12');
+  });
+
+  it('prohibits frightening content', () => {
+    expect(prompt).toContain('no frightening imagery');
+  });
+
+  it('requires sensory details', () => {
+    expect(prompt).toContain('sensory detail');
   });
 });
 
-describe('Vignette Tool Schema', () => {
+describe('Bible Story Tool Schema', () => {
   it('has correct tool name', () => {
-    expect(VIGNETTE_TOOL.name).toBe('publish_vignette');
+    expect(BIBLE_STORY_TOOL.name).toBe('publish_bible_story');
   });
 
-  it('requires all four fields', () => {
-    expect(VIGNETTE_TOOL.input_schema.required).toEqual([
-      'story', 'eventTitle', 'eventYear', 'mlaCitation'
+  it('requires all six fields', () => {
+    expect(BIBLE_STORY_TOOL.input_schema.required).toEqual([
+      'story', 'title', 'theme', 'scriptureReference', 'verseText', 'moral'
     ]);
   });
 
   it('defines story property', () => {
-    expect(VIGNETTE_TOOL.input_schema.properties.story).toBeDefined();
-    expect(VIGNETTE_TOOL.input_schema.properties.story.type).toBe('string');
+    expect(BIBLE_STORY_TOOL.input_schema.properties.story).toBeDefined();
+    expect(BIBLE_STORY_TOOL.input_schema.properties.story.type).toBe('string');
   });
 
-  it('defines eventTitle property', () => {
-    expect(VIGNETTE_TOOL.input_schema.properties.eventTitle).toBeDefined();
+  it('defines title property', () => {
+    expect(BIBLE_STORY_TOOL.input_schema.properties.title).toBeDefined();
   });
 
-  it('defines eventYear property', () => {
-    expect(VIGNETTE_TOOL.input_schema.properties.eventYear).toBeDefined();
+  it('defines theme property', () => {
+    expect(BIBLE_STORY_TOOL.input_schema.properties.theme).toBeDefined();
   });
 
-  it('defines mlaCitation property', () => {
-    expect(VIGNETTE_TOOL.input_schema.properties.mlaCitation).toBeDefined();
+  it('defines scriptureReference property', () => {
+    expect(BIBLE_STORY_TOOL.input_schema.properties.scriptureReference).toBeDefined();
+  });
+
+  it('defines verseText property', () => {
+    expect(BIBLE_STORY_TOOL.input_schema.properties.verseText).toBeDefined();
+  });
+
+  it('defines moral property', () => {
+    expect(BIBLE_STORY_TOOL.input_schema.properties.moral).toBeDefined();
   });
 });

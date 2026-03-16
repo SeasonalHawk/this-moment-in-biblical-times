@@ -1,16 +1,17 @@
 # This Moment in Biblical Times
 
-AI-powered biblical times storytelling with voice narration. Pick a date. Step into the ancient world.
+AI-powered Bible bedtime stories for children ages 6-12 with voice narration.
+Tonight's story is waiting. Just press play.
 
 [Wiki](https://github.com/SeasonalHawk/this-moment-in-biblical-times/wiki) | [Issues](https://github.com/SeasonalHawk/this-moment-in-biblical-times/issues)
 
 ## How It Works
 
-1. **Pick a date** from the calendar
-2. **Read** the AI-generated creative nonfiction vignette (150-200 words, literary journalism)
-3. **Listen** — narration auto-generates with Adam's voice and biblical times-themed music
-4. **Control** — Play/Pause, Replay, Download MP3, Mute Music
-5. **Discover** — click "Biblical Encounter" for a genre-themed story from the ancient world
+1. **Open the app** — Tonight's Story is ready on the Storybook Lamp home screen
+2. **Tap "Read to Me"** — an immersive 2nd-person Bible story generates just for bedtime
+3. **Listen** — gentle narration plays with calming background music
+4. **Goodnight** — the story ends with a blessing and a peaceful music fade-out
+5. **Browse** — open the Bookshelf to pick from 65+ Bible stories organized by category
 
 ## Tech Stack
 
@@ -18,10 +19,10 @@ AI-powered biblical times storytelling with voice narration. Pick a date. Step i
 |-------|-----------|
 | Framework | Next.js 16 (App Router), React 19, TypeScript |
 | Styling | Tailwind CSS 4 |
-| AI Storytelling | Anthropic Claude API (Haiku 4.5) |
+| AI Storytelling | Anthropic Claude API (Haiku 4.5) with tool use |
 | Voice Narration | ElevenLabs TTS API (Adam voice, Flash v2.5) |
-| Background Music | This Moment Is Wrong Somehow — Strange History ambient soundtrack (static asset) |
-| Calendar | react-day-picker, date-fns |
+| Background Music | Calming instrumental (static asset) |
+| Bible Version | Configurable (NABRE default) — NABRE, NIV, KJV, ESV, NLT, NKJV |
 | Testing | Vitest, React Testing Library |
 | Prompt Framework | Kajiro IQ Pro |
 | Deployment | Vercel |
@@ -41,6 +42,7 @@ Create `.env.local`:
 ```env
 ANTHROPIC_API_KEY=your-anthropic-key
 ELEVENLABS_API_KEY=your-elevenlabs-key
+BIBLE_VERSION=NABRE
 ```
 
 ```bash
@@ -55,13 +57,14 @@ Open [http://localhost:3002](http://localhost:3002)
 |----------|----------|-------------|
 | `ANTHROPIC_API_KEY` | Yes | Anthropic API key for story generation |
 | `ELEVENLABS_API_KEY` | Yes | ElevenLabs API key for voice narration |
+| `BIBLE_VERSION` | No | Default Bible translation (default: `NABRE`). Supported: `NABRE`, `NIV`, `KJV`, `ESV`, `NLT`, `NKJV` |
 | `RATE_LIMIT_MAX` | No | Max requests per IP per window (default: 10) |
 | `RATE_LIMIT_WINDOW_MS` | No | Rate limit window in ms (default: 60000) |
 
 ## Testing
 
 ```bash
-pnpm test          # Run all 234+ tests
+pnpm test          # Run all 242 tests
 pnpm build         # Production build
 pnpm test:watch    # Watch mode
 ```
@@ -72,10 +75,10 @@ pnpm test:watch    # Watch mode
 this-moment-in-biblical-times/
 ├── public/          # Static assets (audio, logos, favicons, PWA manifest)
 ├── src/app/         # Next.js App Router (pages + API routes)
-├── src/components/  # React components (CalendarPicker, Collapsible, LoadingState, StoryCard)
-├── src/hooks/       # Custom hooks (useHistoryStory, useTextToSpeech, useBackgroundMusic)
-├── src/lib/         # Shared utilities (costs, genres, prompts, rateLimit, validation)
-└── src/__tests__/   # 14 test files, 234+ tests
+├── src/components/  # React components (TonightStoryCard, StoryPlayer, Bookshelf, BookSpine, BookPreview, Settings, etc.)
+├── src/hooks/       # Custom hooks (useBibleStory, useTextToSpeech, useBackgroundMusic)
+├── src/lib/         # Shared utilities (bibleStories, storyProgress, settings, prompts, costs, validation, rateLimit)
+└── src/__tests__/   # 14 test files, 242 tests
 ```
 
 See [Wiki > Architecture](https://github.com/SeasonalHawk/this-moment-in-biblical-times/wiki/Architecture) for the complete file map.

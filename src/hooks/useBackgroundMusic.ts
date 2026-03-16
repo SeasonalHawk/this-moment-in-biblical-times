@@ -2,8 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+// TODO: Replace with biblical-tone background music — calming harp/lullaby instrumental
+// that fits the bedtime Bible stories theme. Current track is a leftover from the old build.
 const BG_MUSIC_URL = '/audio/this-moment-is-wrong-somehow.mp3';
-const TARGET_VOLUME = 0.17; // 17% volume — tuned for the Strange History ambient track
+const TARGET_VOLUME = 0.12; // 12% volume — gentler for bedtime stories
 const FADE_IN_MS = 2000; // 2 seconds fade-in
 const FADE_OUT_MS = 3000; // 3 seconds fade-out — lets the music trail off gracefully
 const FADE_INTERVAL_MS = 50; // Update every 50ms

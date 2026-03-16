@@ -74,7 +74,7 @@ describe('Issue #2: LoadingState uses multi-phase interface', () => {
   });
 });
 
-describe('Issue #2: page.tsx uses new loading and cost features', () => {
+describe('Issue #2: page.tsx uses loading features', () => {
   const pageSource = fs.readFileSync(
     path.resolve(__dirname, '../app/page.tsx'), 'utf-8'
   );
@@ -83,18 +83,18 @@ describe('Issue #2: page.tsx uses new loading and cost features', () => {
     expect(pageSource).toMatch(/import.*pickRandom.*from.*loadingMessages/);
   });
 
-  it('imports calculateCost and formatCost', () => {
-    expect(pageSource).toMatch(/import.*calculateCost.*from.*costs/);
-    expect(pageSource).toMatch(/import.*formatCost.*from.*costs/);
+  it('imports Bible story utilities', () => {
+    expect(pageSource).toMatch(/import.*getBibleVersion.*from.*settings/);
+    expect(pageSource).toMatch(/import.*getTonightsStory.*from.*storyProgress/);
   });
 
-  it('timing label includes cost estimate', () => {
-    expect(pageSource).toContain('Est. cost:');
+  it('uses StoryPlayer component', () => {
+    expect(pageSource).toContain('StoryPlayer');
   });
 
-  it('renamed Audio to Narration in timing label', () => {
-    expect(pageSource).toContain('Narration');
-    // Should NOT use "Audio" in the timing label anymore
-    expect(pageSource).not.toMatch(/`Story.*· Audio \$/);
+  it('uses NDJSON streaming pipeline', () => {
+    expect(pageSource).toContain('/api/pipeline');
+    expect(pageSource).toContain('storyId');
+    expect(pageSource).toContain('bibleVersion');
   });
 });
