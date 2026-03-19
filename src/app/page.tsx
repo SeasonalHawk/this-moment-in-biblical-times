@@ -12,8 +12,11 @@ import { useTextToSpeech } from '@/hooks/useTextToSpeech';
 import { useBackgroundMusic } from '@/hooks/useBackgroundMusic';
 import { getTonightsStory, markStoryHeard, getStoriesHeardCount, getHeardStoryIds } from '@/lib/storyProgress';
 import { getRandomStory, type BibleStory } from '@/lib/bibleStories';
-import { getBibleVersion } from '@/lib/settings';
+import { getBibleVersion, getFollowAlong } from '@/lib/settings';
 import { pickRandom, STORY_PHASE_MESSAGES, AUDIO_PHASE_MESSAGES } from '@/lib/loadingMessages';
+import { useWordHighlight } from '@/hooks/useWordHighlight';
+import { mapCharacterAlignmentToWords, type WordTiming, type CharacterAlignment } from '@/lib/alignment';
+import { loadPreBuiltStory } from '@/lib/staticStory';
 
 type AppView = 'lamp' | 'bookshelf' | 'settings';
 
@@ -26,6 +29,8 @@ export default function Home() {
   const [storiesHeard, setStoriesHeard] = useState(0);
   const [heardIds, setHeardIds] = useState<Set<string>>(new Set());
   const [tonightStory, setTonightStory] = useState<BibleStory | null>(null);
+  const [wordTimings, setWordTimings] = useState<WordTiming[] | null>(null);
+  const [followAlong, setFollowAlongState] = useState(true);
   const phaseStartRef = useRef<number>(0);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -39,11 +44,19 @@ export default function Home() {
   ttsCleanupRef.current = tts.cleanup;
   bgStopRef.current = bgMusic.stop;
 
+  // Follow-along word highlighting (syncs audio currentTime → word index)
+  const highlight = useWordHighlight({
+    audioElement: tts.getAudioElement(),
+    wordTimings,
+    enabled: followAlong,
+  });
+
   // Hydrate progress and tonight's story on mount
   useEffect(() => {
     setStoriesHeard(getStoriesHeardCount());
     setHeardIds(getHeardStoryIds());
     setTonightStory(getTonightsStory());
+    setFollowAlongState(getFollowAlong());
   }, []);
 
   // Stop audio when page is closed or hidden
@@ -86,6 +99,8 @@ export default function Home() {
     bgMusic.stop();
     setNarrationEnded(false);
     setStoryExpanded(false);
+    setWordTimings(null);
+    highlight.reset();
 
     const now = Date.now();
     setPipelineStart(now);
@@ -107,6 +122,57 @@ export default function Home() {
     const bibleVersion = getBibleVersion();
 
     try {
+      // ── Check for pre-built static files (instant playback) ──
+      const preBuilt = await loadPreBuiltStory(story.id);
+      if (preBuilt && !controller.signal.aborted) {
+        // Skip loading phases — serve instantly
+        setPhases([]);
+        setPipelineStart(null);
+
+        bible.setResult({
+          story: preBuilt.storyData.story,
+          storyId: story.id,
+          metadata: {
+            title: preBuilt.storyData.title,
+            theme: preBuilt.storyData.theme,
+            scriptureReference: preBuilt.storyData.scriptureReference,
+            verseText: preBuilt.storyData.verseText,
+            moral: preBuilt.storyData.moral,
+          },
+        });
+
+        // Mark as heard and update progress
+        markStoryHeard(story.id);
+        setStoriesHeard(getStoriesHeardCount());
+        setHeardIds(getHeardStoryIds());
+
+        // Process alignment data for follow-along
+        try {
+          const timings = mapCharacterAlignmentToWords(
+            preBuilt.alignment,
+            preBuilt.storyData.story,
+          );
+          setWordTimings(timings);
+        } catch {
+          // Alignment failed — continue without highlighting
+        }
+
+        // Play audio instantly
+        await tts.playBlob(preBuilt.audioBlob, {
+          onStart: () => {
+            bgMusic.play();
+            setStoryExpanded(true);
+          },
+          onEnd: () => {
+            bgMusic.fadeOut();
+            setNarrationEnded(true);
+          },
+        });
+
+        return; // Done — skip pipeline
+      }
+
+      // ── Fall back to on-demand pipeline ──
       const response = await fetch('/api/pipeline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -184,6 +250,19 @@ export default function Home() {
               { ...prev[1], endTime: audioEnd },
             ]);
 
+            // Process alignment data for follow-along highlighting
+            if (event.alignment && bible.story) {
+              try {
+                const timings = mapCharacterAlignmentToWords(
+                  event.alignment as CharacterAlignment,
+                  bible.story,
+                );
+                setWordTimings(timings);
+              } catch {
+                // Alignment mapping failed — continue without highlighting
+              }
+            }
+
             // Decode base64 → blob → play
             const binaryString = atob(event.audio);
             const bytes = new Uint8Array(binaryString.length);
@@ -241,6 +320,7 @@ export default function Home() {
 
   const handleReplay = () => {
     setNarrationEnded(false);
+    highlight.reset();
     tts.replay();
     bgMusic.play();
   };
@@ -254,6 +334,8 @@ export default function Home() {
     setPhases([]);
     setNarrationEnded(false);
     setStoryExpanded(false);
+    setWordTimings(null);
+    highlight.reset();
   };
 
   // ── Bookshelf View ──
@@ -269,7 +351,12 @@ export default function Home() {
 
   // ── Settings View ──
   if (view === 'settings') {
-    return <Settings onClose={() => setView('lamp')} />;
+    return (
+      <Settings
+        onClose={() => setView('lamp')}
+        onFollowAlongChange={setFollowAlongState}
+      />
+    );
   }
 
   // ── Storybook Lamp Home ──
@@ -375,6 +462,8 @@ export default function Home() {
               toggleMute: bgMusic.toggleMute,
             }}
             narrationEnded={narrationEnded}
+            followAlongWordIndex={highlight.currentWordIndex}
+            followAlongEnabled={followAlong}
           />
         )}
 

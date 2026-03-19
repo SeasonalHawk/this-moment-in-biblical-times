@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
 
 // Constants matching the TTS route configuration
-const EXPECTED_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam
+const EXPECTED_VOICE_ID = 'oTQK6KgOJHp8UGGZjwUu'; // Moonlit narrator
 const EXPECTED_MODEL = 'eleven_flash_v2_5';
 
 describe('TTS Route Configuration', () => {
-  it('uses Adam voice ID', () => {
-    // Verify the configured voice matches Adam
-    expect(EXPECTED_VOICE_ID).toBe('pNInz6obpgDQGcFmaJgB');
+  it('uses Moonlit narrator voice ID', () => {
+    expect(EXPECTED_VOICE_ID).toBe('oTQK6KgOJHp8UGGZjwUu');
   });
 
   it('uses flash v2.5 model for lowest latency', () => {
@@ -16,7 +15,7 @@ describe('TTS Route Configuration', () => {
 
   it('constructs correct ElevenLabs API URL', () => {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${EXPECTED_VOICE_ID}`;
-    expect(url).toBe('https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB');
+    expect(url).toBe('https://api.elevenlabs.io/v1/text-to-speech/oTQK6KgOJHp8UGGZjwUu');
   });
 });
 

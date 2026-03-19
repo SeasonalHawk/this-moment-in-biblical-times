@@ -235,6 +235,31 @@ describe('StoryPlayer', () => {
     expect(screen.queryByText(/Goodnight/)).not.toBeInTheDocument();
   });
 
+  // Follow-along highlighting
+  it('renders HighlightedText when followAlongEnabled is true', () => {
+    const { container } = render(
+      <StoryPlayer {...defaultProps} followAlongEnabled={true} followAlongWordIndex={0} />
+    );
+    // When enabled, words should be in spans
+    const spans = container.querySelectorAll('span');
+    expect(spans.length).toBeGreaterThan(0);
+  });
+
+  it('renders plain text when followAlongEnabled is false', () => {
+    const { container } = render(
+      <StoryPlayer {...defaultProps} followAlongEnabled={false} followAlongWordIndex={0} />
+    );
+    // When disabled, no spans in the story text area
+    const storyDiv = container.querySelector('.whitespace-pre-wrap');
+    const spans = storyDiv?.querySelectorAll('span') || [];
+    expect(spans).toHaveLength(0);
+  });
+
+  it('renders story text without follow-along props (backwards compat)', () => {
+    render(<StoryPlayer {...defaultProps} />);
+    expect(screen.getByText(/You walk along the dusty road/)).toBeInTheDocument();
+  });
+
   // Full audio controls layout
   it('shows all audio controls when hasAudio is true', () => {
     render(

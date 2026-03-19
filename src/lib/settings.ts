@@ -70,3 +70,28 @@ export function clearBibleVersionOverride(): void {
 function isSupportedVersion(value: string): value is BibleVersion {
   return SUPPORTED_BIBLE_VERSIONS.includes(value as BibleVersion);
 }
+
+// ── Follow-Along Setting ─────────────────────────────────────────────────────
+
+const STORAGE_KEY_FOLLOW_ALONG = 'follow-along';
+
+/**
+ * Get the follow-along preference (highlight words as they're spoken).
+ * Default: true (enabled) — targets children learning to read.
+ */
+export function getFollowAlong(): boolean {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem(STORAGE_KEY_FOLLOW_ALONG);
+    if (stored !== null) return stored === 'true';
+  }
+  return true;
+}
+
+/**
+ * Save the follow-along preference to localStorage.
+ */
+export function setFollowAlong(enabled: boolean): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY_FOLLOW_ALONG, String(enabled));
+  }
+}

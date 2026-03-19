@@ -17,8 +17,12 @@ const pageSource = fs.readFileSync(
 );
 
 describe('useBackgroundMusic: audio source', () => {
-  it('uses This Moment Is Wrong Somehow as background music', () => {
-    expect(hookSource).toContain("'/audio/this-moment-is-wrong-somehow.mp3'");
+  it('uses Moonlit Storytime Lullaby as background music', () => {
+    expect(hookSource).toContain("'/audio/moonlit-storytime-lullaby.mp3'");
+  });
+
+  it('does NOT reference old this-moment-is-wrong-somehow.mp3', () => {
+    expect(hookSource).not.toContain('this-moment-is-wrong-somehow.mp3');
   });
 
   it('does NOT reference old chronostream-runner.mp3', () => {
@@ -241,7 +245,7 @@ describe('useBackgroundMusic: Audio element behavior (mock)', () => {
     // Dynamically import to get a fresh module with our mock
     const mod = await import('../hooks/useBackgroundMusic');
     // The module exports the hook — we can verify the URL constant is correct
-    expect(hookSource).toContain("'/audio/this-moment-is-wrong-somehow.mp3'");
+    expect(hookSource).toContain("'/audio/moonlit-storytime-lullaby.mp3'");
   });
 
   it('audio preload is set to auto for eager loading', () => {

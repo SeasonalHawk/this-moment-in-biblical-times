@@ -5,12 +5,16 @@ import {
   SUPPORTED_BIBLE_VERSIONS,
   getBibleVersion,
   setBibleVersion,
+  getFollowAlong,
+  setFollowAlong,
   type BibleVersion,
 } from '../lib/settings';
 
 interface SettingsProps {
   /** Close the settings panel and return to the main view */
   onClose: () => void;
+  /** Callback when follow-along setting changes */
+  onFollowAlongChange?: (enabled: boolean) => void;
 }
 
 /**
@@ -19,12 +23,14 @@ interface SettingsProps {
  *
  * Stored in localStorage so each device can have its own preference.
  */
-export default function Settings({ onClose }: SettingsProps) {
+export default function Settings({ onClose, onFollowAlongChange }: SettingsProps) {
   const [version, setVersion] = useState<BibleVersion>('NABRE');
+  const [followAlong, setFollowAlongState] = useState(true);
 
   // Hydrate from localStorage/env on mount
   useEffect(() => {
     setVersion(getBibleVersion());
+    setFollowAlongState(getFollowAlong());
   }, []);
 
   const handleVersionChange = (newVersion: BibleVersion) => {
@@ -84,6 +90,43 @@ export default function Settings({ onClose }: SettingsProps) {
         <p className="text-xs text-indigo-500 mt-2">
           Currently using: <span className="text-amber-400">{getBibleVersionLabel(version)}</span>
         </p>
+      </section>
+
+      {/* Follow Along */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <label
+              htmlFor="follow-along"
+              className="block text-sm font-medium text-indigo-300"
+            >
+              Follow Along
+            </label>
+            <p className="text-sm text-indigo-400 mt-1">
+              Highlight each word as the story is read aloud.
+            </p>
+          </div>
+          <button
+            id="follow-along"
+            role="switch"
+            aria-checked={followAlong}
+            onClick={() => {
+              const next = !followAlong;
+              setFollowAlongState(next);
+              setFollowAlong(next);
+              onFollowAlongChange?.(next);
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+              followAlong ? 'bg-amber-500' : 'bg-indigo-700'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                followAlong ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
       </section>
 
       {/* Info footer */}

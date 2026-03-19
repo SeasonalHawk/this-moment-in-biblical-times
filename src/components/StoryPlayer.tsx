@@ -1,6 +1,7 @@
 'use client';
 
 import Collapsible from './Collapsible';
+import HighlightedText from './HighlightedText';
 
 interface StoryPlayerProps {
   /** The generated story text */
@@ -41,6 +42,10 @@ interface StoryPlayerProps {
   };
   /** Whether audio narration has ended (show Goodnight state) */
   narrationEnded: boolean;
+  /** Index of the currently-spoken word for follow-along highlight (-1 = none) */
+  followAlongWordIndex?: number;
+  /** Whether follow-along mode is active */
+  followAlongEnabled?: boolean;
 }
 
 /**
@@ -62,6 +67,8 @@ export default function StoryPlayer({
   audio,
   music,
   narrationEnded,
+  followAlongWordIndex = -1,
+  followAlongEnabled = false,
 }: StoryPlayerProps) {
   return (
     <div className="bg-indigo-900/60 border border-indigo-700/50 rounded-xl overflow-hidden backdrop-blur-sm">
@@ -123,9 +130,13 @@ export default function StoryPlayer({
         }
       >
         <div className="px-4 pb-4 space-y-4">
-          {/* Story text */}
+          {/* Story text — with optional follow-along word highlighting */}
           <div className="text-base text-indigo-100 leading-relaxed whitespace-pre-wrap font-light">
-            {story}
+            <HighlightedText
+              text={story}
+              currentWordIndex={followAlongWordIndex}
+              enabled={followAlongEnabled}
+            />
           </div>
 
           {/* Moral / takeaway */}

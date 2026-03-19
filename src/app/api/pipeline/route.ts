@@ -4,7 +4,7 @@ import { validateRequest, buildUserMessage } from '@/lib/validation';
 import { rateLimit } from '@/lib/rateLimit';
 import { buildSystemPrompt, BIBLE_STORY_TOOL, STORY_MODEL } from '@/lib/prompts';
 
-const ELEVENLABS_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam — warm, deep voice
+const ELEVENLABS_VOICE_ID = 'oTQK6KgOJHp8UGGZjwUu'; // Moonlit narrator — warm bedtime voice
 const ELEVENLABS_MODEL = 'eleven_flash_v2_5'; // Fastest English model
 const BRANDING_OUTRO = 'This story is brought to you by This Moment in Biblical Times. Goodnight, and God bless.';
 
@@ -13,10 +13,11 @@ const BRANDING_OUTRO = 'This story is brought to you by This Moment in Biblical 
  *
  * Response format (newline-delimited JSON):
  *   {"type":"story", "story":"...", "title":"...", ...}\n
- *   {"type":"audio", "audio":"<base64>"}\n
+ *   {"type":"audio", "audio":"<base64>", "alignment":{...}}\n
  *
  * The story line is flushed immediately so the client can display it
  * while TTS is still generating on the server (server-side overlap).
+ * The audio event includes character-level alignment data for follow-along highlighting.
  */
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
         const fullText = input.story + outro;
 
         const ttsResponse = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+          `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/with-timestamps`,
           {
             method: 'POST',
             headers: {
@@ -128,15 +129,52 @@ export async function POST(request: NextRequest) {
           throw new Error('Failed to generate audio');
         }
 
-        const audioBuffer = await ttsResponse.arrayBuffer();
-        const base64Audio = Buffer.from(audioBuffer).toString('base64');
+        // Parse NDJSON chunks from with-timestamps endpoint:
+        // Each line is JSON with { audio_base64, alignment? }
+        // We accumulate audio buffers and merge alignment arrays.
+        const ttsBody = await ttsResponse.text();
+        const ttsLines = ttsBody.split('\n').filter(line => line.trim());
 
-        controller.enqueue(encoder.encode(JSON.stringify({
+        const audioChunks: Buffer[] = [];
+        const allCharacters: string[] = [];
+        const allStartTimes: number[] = [];
+        const allEndTimes: number[] = [];
+
+        for (const line of ttsLines) {
+          try {
+            const chunk = JSON.parse(line);
+            if (chunk.audio_base64) {
+              audioChunks.push(Buffer.from(chunk.audio_base64, 'base64'));
+            }
+            if (chunk.alignment) {
+              allCharacters.push(...(chunk.alignment.characters || []));
+              allStartTimes.push(...(chunk.alignment.character_start_times_seconds || []));
+              allEndTimes.push(...(chunk.alignment.character_end_times_seconds || []));
+            }
+          } catch {
+            // Skip malformed chunks
+          }
+        }
+
+        const combinedAudio = Buffer.concat(audioChunks);
+        const base64Audio = combinedAudio.toString('base64');
+
+        const audioEvent: Record<string, unknown> = {
           type: 'audio',
           audio: base64Audio,
-          // Character count for cost estimation
           ttsCharacters: fullText.length,
-        }) + '\n'));
+        };
+
+        // Include alignment data if available (graceful degradation)
+        if (allCharacters.length > 0) {
+          audioEvent.alignment = {
+            characters: allCharacters,
+            character_start_times_seconds: allStartTimes,
+            character_end_times_seconds: allEndTimes,
+          };
+        }
+
+        controller.enqueue(encoder.encode(JSON.stringify(audioEvent) + '\n'));
 
       } catch (err: unknown) {
         const error = err as { status?: number; message?: string };

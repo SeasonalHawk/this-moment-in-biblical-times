@@ -205,9 +205,13 @@ export function useTextToSpeech() {
     };
   }, [cleanup]);
 
+  // Expose audio element for external sync (e.g. follow-along highlighting)
+  const getAudioElement = useCallback(() => audioRef.current, []);
+
   return {
     speak, warmUp, playBlob, setLoadingState,
     togglePlayPause, replay, stop, cleanup, download,
+    getAudioElement,
     loading, playing, paused, hasAudio, error,
   };
 }

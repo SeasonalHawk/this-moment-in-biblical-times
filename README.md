@@ -11,7 +11,7 @@ Tonight's story is waiting. Just press play.
 2. **Tap "Read to Me"** — an immersive 2nd-person Bible story generates just for bedtime
 3. **Listen** — gentle narration plays with calming background music
 4. **Goodnight** — the story ends with a blessing and a peaceful music fade-out
-5. **Browse** — open the Bookshelf to pick from 65+ Bible stories organized by category
+5. **Browse** — open the Bookshelf to pick from 71 Bible stories organized by category
 
 ## Tech Stack
 
@@ -20,8 +20,9 @@ Tonight's story is waiting. Just press play.
 | Framework | Next.js 16 (App Router), React 19, TypeScript |
 | Styling | Tailwind CSS 4 |
 | AI Storytelling | Anthropic Claude API (Haiku 4.5) with tool use |
-| Voice Narration | ElevenLabs TTS API (Adam voice, Flash v2.5) |
-| Background Music | Calming instrumental (static asset) |
+| Voice Narration | ElevenLabs TTS API (Moonlit narrator voice, Flash v2.5) |
+| Follow-Along | Karaoke-style word highlighting synced to narration |
+| Background Music | Moonlit Storytime Lullaby (static asset) |
 | Bible Version | Configurable (NABRE default) — NABRE, NIV, KJV, ESV, NLT, NKJV |
 | Testing | Vitest, React Testing Library |
 | Prompt Framework | Kajiro IQ Pro |
@@ -64,7 +65,7 @@ Open [http://localhost:3002](http://localhost:3002)
 ## Testing
 
 ```bash
-pnpm test          # Run all 242 tests
+pnpm test          # Run all 277 tests
 pnpm build         # Production build
 pnpm test:watch    # Watch mode
 ```
@@ -74,11 +75,13 @@ pnpm test:watch    # Watch mode
 ```
 this-moment-in-biblical-times/
 ├── public/          # Static assets (audio, logos, favicons, PWA manifest)
+│   └── stories/     # Pre-built story audio + alignment data (per-story directories)
+├── scripts/         # Story generation scripts (generate-story.ts, generate-all.ts)
 ├── src/app/         # Next.js App Router (pages + API routes)
-├── src/components/  # React components (TonightStoryCard, StoryPlayer, Bookshelf, BookSpine, BookPreview, Settings, etc.)
-├── src/hooks/       # Custom hooks (useBibleStory, useTextToSpeech, useBackgroundMusic)
-├── src/lib/         # Shared utilities (bibleStories, storyProgress, settings, prompts, costs, validation, rateLimit)
-└── src/__tests__/   # 14 test files, 242 tests
+├── src/components/  # React components (TonightStoryCard, StoryPlayer, HighlightedText, Bookshelf, BookSpine, BookPreview, Settings, etc.)
+├── src/hooks/       # Custom hooks (useBibleStory, useTextToSpeech, useBackgroundMusic, useWordHighlight)
+├── src/lib/         # Shared utilities (bibleStories, alignment, staticStory, storyProgress, settings, prompts, costs, validation, rateLimit)
+└── src/__tests__/   # 17 test files, 277 tests
 ```
 
 See [Wiki > Architecture](https://github.com/SeasonalHawk/this-moment-in-biblical-times/wiki/Architecture) for the complete file map.

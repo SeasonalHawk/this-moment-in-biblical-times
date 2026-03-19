@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 import { buildSystemPrompt, BIBLE_STORY_TOOL, STORY_MODEL } from '@/lib/prompts';
+
+const pipelineSource = fs.readFileSync(
+  path.resolve(__dirname, '../app/api/pipeline/route.ts'),
+  'utf-8'
+);
 
 describe('Pipeline Configuration', () => {
   const PIPELINE_TTS_MODEL = 'eleven_flash_v2_5';
-  const PIPELINE_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam
+  const PIPELINE_VOICE_ID = 'oTQK6KgOJHp8UGGZjwUu'; // Moonlit narrator
 
   it('uses an active (non-retired) Claude model for story generation', () => {
     // claude-3-5-haiku-20241022 was retired Feb 19, 2026
@@ -27,8 +34,16 @@ describe('Pipeline Configuration', () => {
     expect(PIPELINE_TTS_MODEL).toBe('eleven_flash_v2_5');
   });
 
-  it('uses Adam voice for narration', () => {
-    expect(PIPELINE_VOICE_ID).toBe('pNInz6obpgDQGcFmaJgB');
+  it('uses Moonlit narrator voice for narration', () => {
+    expect(PIPELINE_VOICE_ID).toBe('oTQK6KgOJHp8UGGZjwUu');
+  });
+
+  it('uses with-timestamps endpoint for follow-along alignment', () => {
+    expect(pipelineSource).toContain('/with-timestamps');
+  });
+
+  it('does NOT reference old Adam voice ID', () => {
+    expect(pipelineSource).not.toContain('pNInz6obpgDQGcFmaJgB');
   });
 });
 

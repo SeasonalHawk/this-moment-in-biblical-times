@@ -107,10 +107,19 @@ export default function ContentCard({ onClose, spinning, ...props }: ContentCard
       <div className="card-header">
         <div className="flex-1">{/* Title / status */}</div>
 
-        {/* Close button — hidden during active loading to prevent partial state */}
+        {/* Close control — hidden during active loading to prevent partial state.
+            Uses div[role="button"] instead of <button> to avoid nested <button>
+            hydration errors when rendered inside a Collapsible header <button>. */}
         {onClose && !spinning && (
-          <button
-            onClick={onClose}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault(); e.stopPropagation(); onClose();
+              }
+            }}
             className="p-1.5 rounded-lg text-indigo-400 hover:text-amber-50
                        hover:bg-indigo-800 transition-colors cursor-pointer"
             title="Close and start over"
@@ -123,7 +132,7 @@ export default function ContentCard({ onClose, spinning, ...props }: ContentCard
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
-          </button>
+          </div>
         )}
       </div>
       <div className="card-body">{/* Content */}</div>
