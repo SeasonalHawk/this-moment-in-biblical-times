@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
 
-const ELEVENLABS_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam — deep, authoritative male narrator
+const ELEVENLABS_VOICE_ID = 'oTQK6KgOJHp8UGGZjwUu'; // Moonlit narrator — warm bedtime voice
 const ELEVENLABS_MODEL = 'eleven_flash_v2_5'; // Fastest English model — lowest latency
-const BRANDING_OUTRO = 'This audio is created by This Moment in Strange History. Copyright 2026.';
+const BRANDING_OUTRO = 'This story is brought to you by This Moment in Biblical Times. Goodnight, and God bless.';
 
 export async function POST(request: NextRequest) {
   // Rate limit by IP
@@ -32,23 +32,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'TTS API key not configured' }, { status: 500 });
   }
 
-  // Build the full narration: story → title, date, year → branding
-  // Truncate metadata fields to prevent cost amplification via oversized values.
+  // Build the full narration: story → title, scripture reference → branding
   const MAX_FIELD_LEN = 200;
-  const eventTitle = typeof body.eventTitle === 'string' ? body.eventTitle.slice(0, MAX_FIELD_LEN) : '';
-  const eventDate = typeof body.eventDate === 'string' ? body.eventDate.slice(0, MAX_FIELD_LEN) : '';
-  const eventYear = typeof body.eventYear === 'string' ? body.eventYear.slice(0, MAX_FIELD_LEN) : '';
+  const title = typeof body.title === 'string' ? body.title.slice(0, MAX_FIELD_LEN) : '';
+  const scriptureRef = typeof body.scriptureReference === 'string' ? body.scriptureReference.slice(0, MAX_FIELD_LEN) : '';
 
   let outro = '\n\n';
-  if (eventTitle) {
-    outro += `${eventTitle}. `;
+  if (title) {
+    outro += `${title}. `;
   }
-  if (eventDate && eventYear) {
-    outro += `${eventDate}, ${eventYear}. `;
-  } else if (eventDate) {
-    outro += `${eventDate}. `;
-  } else if (eventYear) {
-    outro += `${eventYear}. `;
+  if (scriptureRef) {
+    outro += `${scriptureRef}. `;
   }
   outro += `\n\n${BRANDING_OUTRO}`;
 
@@ -67,9 +61,9 @@ export async function POST(request: NextRequest) {
           text: fullText,
           model_id: ELEVENLABS_MODEL,
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0, // Disabled — reduces latency, minimal audible difference for narrator voice
+            stability: 0.6,
+            similarity_boost: 0.7,
+            style: 0.1,
           },
         }),
       }

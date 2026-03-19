@@ -1,52 +1,66 @@
-import { GENRES } from './genres';
+/**
+ * Request validation for Bible story pipeline.
+ * Validates storyId-based requests (replacing the old month/day calendar validation).
+ */
+
+import { getStoryById, BIBLE_STORIES } from './bibleStories';
+import { SUPPORTED_BIBLE_VERSIONS, type BibleVersion } from './settings';
+
+export interface ValidatedStoryRequest {
+  storyId: string;
+  storyTitle: string;
+  scriptureRef: string;
+  bibleVersion: BibleVersion;
+}
 
 export function validateRequest(body: Record<string, unknown> | null) {
   if (!body || typeof body !== 'object') {
     return { valid: false as const, error: 'Request body is required' };
   }
 
-  const { month, day, genre } = body;
+  const { storyId, bibleVersion } = body;
 
-  if (month === undefined || month === null) {
-    return { valid: false as const, error: 'month is required' };
-  }
-  if (day === undefined || day === null) {
-    return { valid: false as const, error: 'day is required' };
+  // storyId is required
+  if (!storyId || typeof storyId !== 'string') {
+    return { valid: false as const, error: 'storyId is required and must be a string' };
   }
 
-  const monthNum = Number(month);
-  const dayNum = Number(day);
-
-  if (!Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
-    return { valid: false as const, error: 'month must be an integer between 1 and 12' };
-  }
-  if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > 31) {
-    return { valid: false as const, error: 'day must be an integer between 1 and 31' };
-  }
-
-  // Genre is optional — validate only if provided
-  const genreStr = genre !== undefined && genre !== null ? String(genre) : null;
-  if (genreStr !== null && !(GENRES as readonly string[]).includes(genreStr)) {
-    return { valid: false as const, error: 'Invalid genre' };
+  // Look up the story in the catalog
+  const story = getStoryById(storyId);
+  if (!story) {
+    return {
+      valid: false as const,
+      error: `Unknown storyId: "${storyId}". Must be one of the ${BIBLE_STORIES.length} stories in the catalog.`,
+    };
   }
 
-  return { valid: true as const, data: { month: monthNum, day: dayNum, genre: genreStr } };
+  // Bible version is optional — validate only if provided
+  const version = bibleVersion !== undefined && bibleVersion !== null
+    ? String(bibleVersion)
+    : null;
+  if (version !== null && !SUPPORTED_BIBLE_VERSIONS.includes(version as BibleVersion)) {
+    return {
+      valid: false as const,
+      error: `Invalid bibleVersion: "${version}". Supported: ${SUPPORTED_BIBLE_VERSIONS.join(', ')}`,
+    };
+  }
+
+  const resolvedVersion: BibleVersion = (version as BibleVersion) ?? 'NABRE';
+
+  return {
+    valid: true as const,
+    data: {
+      storyId: story.id,
+      storyTitle: story.title,
+      scriptureRef: story.scriptureRef,
+      bibleVersion: resolvedVersion,
+    } satisfies ValidatedStoryRequest,
+  };
 }
 
-export function monthName(month: number) {
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  return months[month - 1] || 'January';
-}
-
-export function buildUserMessage(month: number, day: number, genre?: string) {
-  const base = `Write a creative nonfiction vignette about a STRANGE, BIZARRE, or UNEXPLAINED real historical event that happened on ${monthName(month)} ${day}. Prioritize the weird, eerie, and mysterious over mainstream events.`;
-
-  if (!genre) {
-    return base;
-  }
-
-  return `${base} GENRE LENS: "${genre}". Find an event from this date that fits the ${genre} genre. Let this genre shape your storytelling approach: adopt the tone, pacing, and atmosphere that ${genre} content demands. Lead with the sensory details that this genre thrives on — the textures, sounds, and visceral moments that make ${genre} stories compelling. Choose the narrative angle that a ${genre} storyteller would instinctively gravitate toward. The event must still be historically accurate, but frame it through the ${genre} lens.`;
+/**
+ * Build the user message for Claude based on the validated story request.
+ */
+export function buildUserMessage(data: ValidatedStoryRequest): string {
+  return `Tell the Bible story "${data.storyTitle}" based on ${data.scriptureRef} (${data.bibleVersion} translation). Write an immersive bedtime retelling in second person — place the child inside the scene. Include a key verse from the passage in the ${data.bibleVersion} translation for the footer citation.`;
 }

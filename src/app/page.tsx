@@ -1,47 +1,65 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { format } from 'date-fns';
-import CalendarPicker from '@/components/CalendarPicker';
-import StoryCard from '@/components/StoryCard';
+import TonightStoryCard from '@/components/TonightStoryCard';
+import ProgressTracker from '@/components/ProgressTracker';
+import StoryPlayer from '@/components/StoryPlayer';
 import LoadingState, { type LoadingPhase } from '@/components/LoadingState';
-import useHistoryStory from '@/hooks/useHistoryStory';
+import Bookshelf from '@/components/Bookshelf';
+import Settings from '@/components/Settings';
+import useBibleStory from '@/hooks/useBibleStory';
 import { useTextToSpeech } from '@/hooks/useTextToSpeech';
 import { useBackgroundMusic } from '@/hooks/useBackgroundMusic';
-import { getRandomGenre } from '@/lib/genres';
+import { getTonightsStory, markStoryHeard, getStoriesHeardCount, getHeardStoryIds } from '@/lib/storyProgress';
+import { getRandomStory, type BibleStory } from '@/lib/bibleStories';
+import { getBibleVersion, getFollowAlong } from '@/lib/settings';
 import { pickRandom, STORY_PHASE_MESSAGES, AUDIO_PHASE_MESSAGES } from '@/lib/loadingMessages';
-import { calculateCost, formatCost, type CostData } from '@/lib/costs';
+import { useWordHighlight } from '@/hooks/useWordHighlight';
+import { mapCharacterAlignmentToWords, type WordTiming, type CharacterAlignment } from '@/lib/alignment';
+import { loadPreBuiltStory } from '@/lib/staticStory';
 
-interface PipelineTiming {
-  storyMs: number | null;
-  audioMs: number | null;
-}
-
-const formatMs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+type AppView = 'lamp' | 'bookshelf' | 'settings';
 
 export default function Home() {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>();
+  const [view, setView] = useState<AppView>('lamp');
   const [pipelineStart, setPipelineStart] = useState<number | null>(null);
-  const [timing, setTiming] = useState<PipelineTiming>({ storyMs: null, audioMs: null });
   const [phases, setPhases] = useState<LoadingPhase[]>([]);
-  const [costData, setCostData] = useState<CostData | null>(null);
+  const [narrationEnded, setNarrationEnded] = useState(false);
+  const [storyExpanded, setStoryExpanded] = useState(false);
+  const [storiesHeard, setStoriesHeard] = useState(0);
+  const [heardIds, setHeardIds] = useState<Set<string>>(new Set());
+  const [tonightStory, setTonightStory] = useState<BibleStory | null>(null);
+  const [wordTimings, setWordTimings] = useState<WordTiming[] | null>(null);
+  const [followAlong, setFollowAlongState] = useState(true);
   const phaseStartRef = useRef<number>(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const history = useHistoryStory();
+  const bible = useBibleStory();
   const tts = useTextToSpeech();
   const bgMusic = useBackgroundMusic();
 
-  // Keep stable refs to cleanup functions so the event listeners
-  // don't need to re-register on every render.
+  // Keep stable refs to cleanup functions
   const ttsCleanupRef = useRef(tts.cleanup);
   const bgStopRef = useRef(bgMusic.stop);
   ttsCleanupRef.current = tts.cleanup;
   bgStopRef.current = bgMusic.stop;
 
-  // Stop audio and abort pipelines when the page is closed or hidden.
-  // - pagehide: fires reliably on tab close / navigation (modern replacement for beforeunload)
-  // - visibilitychange: fires on tab switch, minimize, mobile app-switch
+  // Follow-along word highlighting (syncs audio currentTime → word index)
+  const highlight = useWordHighlight({
+    audioElement: tts.getAudioElement(),
+    wordTimings,
+    enabled: followAlong,
+  });
+
+  // Hydrate progress and tonight's story on mount
+  useEffect(() => {
+    setStoriesHeard(getStoriesHeardCount());
+    setHeardIds(getHeardStoryIds());
+    setTonightStory(getTonightsStory());
+    setFollowAlongState(getFollowAlong());
+  }, []);
+
+  // Stop audio when page is closed or hidden
   useEffect(() => {
     const teardown = () => {
       if (abortRef.current) abortRef.current.abort();
@@ -66,27 +84,29 @@ export default function Home() {
    * Unified streaming pipeline: calls /api/pipeline which returns NDJSON.
    * Phase 1: story JSON line → display story immediately
    * Phase 2: audio base64 line → decode and play
-   * Server-side overlap: TTS fires immediately after story gen completes,
-   * without waiting for client round-trip.
    */
-  const runPipeline = useCallback(async (date: Date, genre?: string) => {
-    // Abort any in-flight pipeline to prevent race conditions when
-    // the user clicks rapidly or selects a new date mid-stream.
+  const runPipeline = useCallback(async (story: BibleStory) => {
+    // Abort any in-flight pipeline
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // Switch to lamp view if in bookshelf
+    setView('lamp');
+
     // Full reset
     tts.cleanup();
     bgMusic.stop();
-    setTiming({ storyMs: null, audioMs: null });
-    setCostData(null);
+    setNarrationEnded(false);
+    setStoryExpanded(false);
+    setWordTimings(null);
+    highlight.reset();
 
     const now = Date.now();
     setPipelineStart(now);
     phaseStartRef.current = now;
 
-    // Pick random themed messages for this run
+    // Pick random themed messages
     const storyMsg = pickRandom(STORY_PHASE_MESSAGES);
     const audioMsg = pickRandom(AUDIO_PHASE_MESSAGES);
     setPhases([
@@ -94,21 +114,69 @@ export default function Home() {
       { label: audioMsg, startTime: 0 },
     ]);
 
-    // Warm up audio elements during user click to satisfy autoplay policy.
-    // Both TTS and background music need their Audio elements created
-    // synchronously within the user gesture to avoid browser autoplay blocks.
+    // Warm up audio elements during user click
     tts.warmUp();
     bgMusic.warmUp();
-    history.startLoading();
+    bible.startLoading();
 
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
+    const bibleVersion = getBibleVersion();
 
     try {
+      // ── Check for pre-built static files (instant playback) ──
+      const preBuilt = await loadPreBuiltStory(story.id);
+      if (preBuilt && !controller.signal.aborted) {
+        // Skip loading phases — serve instantly
+        setPhases([]);
+        setPipelineStart(null);
+
+        bible.setResult({
+          story: preBuilt.storyData.story,
+          storyId: story.id,
+          metadata: {
+            title: preBuilt.storyData.title,
+            theme: preBuilt.storyData.theme,
+            scriptureReference: preBuilt.storyData.scriptureReference,
+            verseText: preBuilt.storyData.verseText,
+            moral: preBuilt.storyData.moral,
+          },
+        });
+
+        // Mark as heard and update progress
+        markStoryHeard(story.id);
+        setStoriesHeard(getStoriesHeardCount());
+        setHeardIds(getHeardStoryIds());
+
+        // Process alignment data for follow-along
+        try {
+          const timings = mapCharacterAlignmentToWords(
+            preBuilt.alignment,
+            preBuilt.storyData.story,
+          );
+          setWordTimings(timings);
+        } catch {
+          // Alignment failed — continue without highlighting
+        }
+
+        // Play audio instantly
+        await tts.playBlob(preBuilt.audioBlob, {
+          onStart: () => {
+            bgMusic.play();
+            setStoryExpanded(true);
+          },
+          onEnd: () => {
+            bgMusic.fadeOut();
+            setNarrationEnded(true);
+          },
+        });
+
+        return; // Done — skip pipeline
+      }
+
+      // ── Fall back to on-demand pipeline ──
       const response = await fetch('/api/pipeline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, day, ...(genre ? { genre } : {}) }),
+        body: JSON.stringify({ storyId: story.id, bibleVersion }),
         signal: controller.signal,
       });
 
@@ -132,7 +200,7 @@ export default function Home() {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop()!; // Keep incomplete line in buffer
+        buffer = lines.pop()!;
 
         for (const line of lines) {
           if (!line.trim()) continue;
@@ -147,50 +215,52 @@ export default function Home() {
 
           if (event.type === 'story') {
             const storyEnd = Date.now();
-            const storyMs = storyEnd - phaseStartRef.current;
-            setTiming(prev => ({ ...prev, storyMs }));
             phaseStartRef.current = storyEnd;
 
-            // Close phase 1, open phase 2
             setPhases(prev => [
               { ...prev[0], endTime: storyEnd },
               { ...prev[1], startTime: storyEnd },
             ]);
 
-            // Capture token usage for cost estimation
-            if (event.inputTokens !== undefined && event.outputTokens !== undefined) {
-              setCostData({ inputTokens: event.inputTokens, outputTokens: event.outputTokens, ttsCharacters: 0 });
-            }
-
-            // Display story immediately — TTS is already generating on the server
-            history.setResult({
+            bible.setResult({
               story: event.story,
+              storyId: story.id,
               metadata: {
-                eventTitle: event.eventTitle,
-                eventYear: event.eventYear,
-                mlaCitation: event.mlaCitation,
+                title: event.title || story.title,
+                theme: event.theme || null,
+                scriptureReference: event.scriptureReference || story.scriptureRef,
+                verseText: event.verseText || null,
+                moral: event.moral || null,
               },
-              genre: event.genre,
             });
 
-            // Show audio phase message while audio generates
+            // Mark as heard and update progress
+            markStoryHeard(story.id);
+            setStoriesHeard(getStoriesHeardCount());
+            setHeardIds(getHeardStoryIds());
+
             tts.setLoadingState(true);
           }
 
           if (event.type === 'audio') {
             const audioEnd = Date.now();
-            const audioMs = audioEnd - phaseStartRef.current;
-            setTiming(prev => ({ ...prev, audioMs }));
 
-            // Close phase 2
             setPhases(prev => [
               prev[0],
               { ...prev[1], endTime: audioEnd },
             ]);
 
-            // Capture TTS character count for cost estimation
-            if (event.ttsCharacters !== undefined) {
-              setCostData(prev => prev ? { ...prev, ttsCharacters: event.ttsCharacters } : prev);
+            // Process alignment data for follow-along highlighting
+            if (event.alignment && bible.story) {
+              try {
+                const timings = mapCharacterAlignmentToWords(
+                  event.alignment as CharacterAlignment,
+                  bible.story,
+                );
+                setWordTimings(timings);
+              } catch {
+                // Alignment mapping failed — continue without highlighting
+              }
             }
 
             // Decode base64 → blob → play
@@ -202,8 +272,14 @@ export default function Home() {
             const blob = new Blob([bytes], { type: 'audio/mpeg' });
 
             await tts.playBlob(blob, {
-              onStart: () => bgMusic.play(),
-              onEnd: () => bgMusic.fadeOut(),
+              onStart: () => {
+                bgMusic.play();
+                setStoryExpanded(true);
+              },
+              onEnd: () => {
+                bgMusic.fadeOut();
+                setNarrationEnded(true);
+              },
             });
           }
 
@@ -213,36 +289,38 @@ export default function Home() {
         }
       }
     } catch (err) {
-      // Silently ignore aborted requests — the new pipeline will take over
       if ((err as Error).name === 'AbortError') return;
-      history.setErrorState((err as Error).message || 'Something went wrong');
+      bible.setErrorState((err as Error).message || 'Something went wrong');
       tts.setLoadingState(false);
     } finally {
       setPipelineStart(null);
     }
-  }, [tts, bgMusic, history]);
+  }, [tts, bgMusic, bible]);
 
-  const handleDateSelect = async (date: Date | undefined) => {
-    if (pipelineStart) return; // Block clicks while pipeline is running
-    setSelectedDate(date);
-    if (date) await runPipeline(date, getRandomGenre());
+  const handleReadToMe = (story: BibleStory) => {
+    if (pipelineStart) return;
+    runPipeline(story);
   };
 
-  const handleRandomHistory = async () => {
-    if (!selectedDate || pipelineStart) return;
-    await runPipeline(selectedDate, getRandomGenre());
+  const handleAnotherStory = () => {
+    if (pipelineStart) return;
+    const another = getRandomStory(bible.activeStoryId ?? undefined);
+    runPipeline(another);
   };
 
-  const handleTogglePlayPause = () => {
+  const handleTogglePlayPause = (): boolean => {
     const nowPlaying = tts.togglePlayPause();
     if (nowPlaying) {
       bgMusic.resume();
     } else {
       bgMusic.pause();
     }
+    return nowPlaying;
   };
 
   const handleReplay = () => {
+    setNarrationEnded(false);
+    highlight.reset();
     tts.replay();
     bgMusic.play();
   };
@@ -251,38 +329,90 @@ export default function Home() {
     if (abortRef.current) abortRef.current.abort();
     tts.cleanup();
     bgMusic.stop();
-    history.setErrorState(''); // Clear story state
-    setSelectedDate(undefined);
+    bible.clear();
     setPipelineStart(null);
     setPhases([]);
-    setTiming({ storyMs: null, audioMs: null });
-    setCostData(null);
+    setNarrationEnded(false);
+    setStoryExpanded(false);
+    setWordTimings(null);
+    highlight.reset();
   };
 
+  // ── Bookshelf View ──
+  if (view === 'bookshelf') {
+    return (
+      <Bookshelf
+        heardStoryIds={heardIds}
+        onBack={() => setView('lamp')}
+        onReadToMe={handleReadToMe}
+      />
+    );
+  }
+
+  // ── Settings View ──
+  if (view === 'settings') {
+    return (
+      <Settings
+        onClose={() => setView('lamp')}
+        onFollowAlongChange={setFollowAlongState}
+      />
+    );
+  }
+
+  // ── Storybook Lamp Home ──
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100">
+    <div className="min-h-screen bg-indigo-950 text-amber-50">
       {/* Header */}
-      <header className="border-b border-stone-800 py-6">
-        <div className="max-w-4xl mx-auto px-4 flex flex-col items-center gap-3">
-          <h1 className="text-3xl sm:text-4xl font-bold text-amber-500 tracking-tight text-center">
-            This Moment in Strange History
-          </h1>
-          <p className="text-stone-400 mt-1">
-            Pick a date. Discover the weird.
-          </p>
+      <header className="py-6">
+        <div className="max-w-lg mx-auto px-4 flex items-center justify-between">
+          <div />
+          <button
+            onClick={() => setView('settings')}
+            className="p-2 rounded-lg text-indigo-400 hover:text-amber-50 hover:bg-indigo-800 transition-colors cursor-pointer"
+            aria-label="Settings"
+          >
+            <svg
+              className="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-        {/* Calendar */}
-        <CalendarPicker
-          selectedDate={selectedDate}
-          onDateSelect={handleDateSelect}
-          disabled={pipelineStart !== null || history.story !== null}
-        />
+      <main className="max-w-lg mx-auto px-4 pb-8 space-y-6">
+        {/* Lamp icon + greeting */}
+        <div className="text-center space-y-3 pt-4">
+          {/* Soft lamp glow */}
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/10 animate-pulse">
+            <span className="text-3xl" role="img" aria-label="Lamp">🪔</span>
+          </div>
+          <h1 className="text-2xl font-bold text-amber-400 font-serif">
+            Good Evening
+          </h1>
+          <p className="text-indigo-300 text-sm">
+            Time for a bedtime story
+          </p>
+        </div>
 
-        {/* Story Area — both cards persist in DOM once pipeline starts */}
+        {/* Tonight's Story Card */}
+        {tonightStory && !bible.story && !bible.loading && (
+          <TonightStoryCard
+            story={tonightStory}
+            onReadToMe={handleReadToMe}
+            disabled={pipelineStart !== null}
+          />
+        )}
+
+        {/* Loading state */}
         {phases.length > 0 && (
           <LoadingState
             phases={phases}
@@ -292,69 +422,82 @@ export default function Home() {
           />
         )}
 
-        {history.error && (
-          <div className="bg-red-900/30 border border-red-800 rounded-xl p-4 max-w-2xl mx-auto text-center">
-            <p className="text-red-400">{history.error}</p>
+        {/* Error state */}
+        {bible.error && (
+          <div className="bg-red-900/30 border border-red-800 rounded-xl p-4 text-center">
+            <p className="text-red-400">{bible.error}</p>
             <button
-              onClick={() => selectedDate && runPipeline(selectedDate)}
-              className="mt-2 text-sm text-red-300 underline hover:text-red-200"
+              onClick={() => tonightStory && runPipeline(tonightStory)}
+              className="mt-2 text-sm text-red-300 underline hover:text-red-200 cursor-pointer"
             >
               Try again
             </button>
           </div>
         )}
 
-        {history.story && selectedDate && (
-          <StoryCard
-            story={history.story}
-            date={selectedDate}
-            eventTitle={history.metadata.eventTitle}
-            eventYear={history.metadata.eventYear}
-            mlaCitation={history.metadata.mlaCitation}
-            genre={history.activeGenre}
-            onRandomHistory={handleRandomHistory}
-            spinning={history.loading || tts.loading}
-            onTogglePlayPause={handleTogglePlayPause}
-            onReplay={handleReplay}
-            onDownloadAudio={() => {
-              const title = history.metadata.eventTitle || 'story';
-              const safeName = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
-              tts.download(`strange-history-${safeName}.mp3`);
-            }}
-            audioPlaying={tts.playing}
-            hasAudio={tts.hasAudio}
-            musicMuted={bgMusic.muted}
-            onToggleMusic={bgMusic.toggleMute}
-            autoExpand={tts.hasAudio}
+        {/* Story Player */}
+        {bible.story && (
+          <StoryPlayer
+            story={bible.story}
+            title={bible.metadata.title}
+            theme={bible.metadata.theme}
+            scriptureReference={bible.metadata.scriptureReference}
+            verseText={bible.metadata.verseText}
+            moral={bible.metadata.moral}
+            bibleVersion={getBibleVersion()}
+            expanded={storyExpanded}
+            onToggle={() => setStoryExpanded(prev => !prev)}
             onClose={handleCloseStory}
-            timingLabel={
-              timing.storyMs !== null && timing.audioMs !== null
-                ? `Story ${formatMs(timing.storyMs)} · Narration ${formatMs(timing.audioMs)} · Total ${formatMs(timing.storyMs + timing.audioMs)}${
-                    costData && costData.ttsCharacters > 0
-                      ? ` · Est. cost: ${formatCost(calculateCost(costData))}`
-                      : ''
-                  }`
-                : timing.storyMs !== null
-                  ? `Story ${formatMs(timing.storyMs)}`
-                  : undefined
-            }
+            spinning={bible.loading || tts.loading}
+            audio={{
+              playing: tts.playing,
+              paused: tts.paused,
+              hasAudio: tts.hasAudio,
+              loading: tts.loading,
+              togglePlayPause: handleTogglePlayPause,
+              replay: handleReplay,
+            }}
+            music={{
+              muted: bgMusic.muted,
+              toggleMute: bgMusic.toggleMute,
+            }}
+            narrationEnded={narrationEnded}
+            followAlongWordIndex={highlight.currentWordIndex}
+            followAlongEnabled={followAlong}
           />
         )}
 
-        {/* Empty state */}
-        {!selectedDate && !history.loading && (
-          <div className="text-center py-12">
-            <p className="text-stone-500 text-lg">
-              Select a date from the calendar above to uncover something strange.
-            </p>
+        {/* Secondary buttons */}
+        {!bible.loading && !pipelineStart && (
+          <div className="flex gap-3">
+            <button
+              onClick={handleAnotherStory}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-800 text-indigo-200 hover:bg-indigo-700 hover:text-amber-50 transition-colors text-sm font-medium cursor-pointer"
+              aria-label="Get another random story"
+            >
+              Another Story
+            </button>
+            <button
+              onClick={() => {
+                handleCloseStory();
+                setView('bookshelf');
+              }}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-800 text-indigo-200 hover:bg-indigo-700 hover:text-amber-50 transition-colors text-sm font-medium cursor-pointer"
+              aria-label="Browse all stories"
+            >
+              📚 Browse Stories
+            </button>
           </div>
         )}
+
+        {/* Progress tracker */}
+        <ProgressTracker storiesHeard={storiesHeard} />
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-stone-800 py-4 mt-auto">
-        <div className="max-w-4xl mx-auto px-4 text-center text-stone-600 text-sm">
-          Built with Kajiro IQ Pro | Powered by Anthropic Claude | Strange History Edition
+      <footer className="border-t border-indigo-900 py-4 mt-auto">
+        <div className="max-w-lg mx-auto px-4 text-center text-indigo-600 text-xs">
+          Built with Kajiro IQ Pro | Powered by Anthropic Claude | This Moment in Biblical Times
         </div>
       </footer>
     </div>

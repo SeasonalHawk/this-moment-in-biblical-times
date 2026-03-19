@@ -1,28 +1,44 @@
 import { describe, it, expect } from 'vitest';
-import { validateRequest, monthName, buildUserMessage } from '@/lib/validation';
+import { validateRequest, buildUserMessage, type ValidatedStoryRequest } from '@/lib/validation';
+import { BIBLE_STORIES } from '@/lib/bibleStories';
 
 describe('validateRequest', () => {
-  it('accepts valid input without genre', () => {
-    const result = validateRequest({ month: 3, day: 13 });
+  const validStoryId = BIBLE_STORIES[0].id;
+
+  it('accepts valid storyId without bibleVersion', () => {
+    const result = validateRequest({ storyId: validStoryId });
     expect(result.valid).toBe(true);
     if (result.valid) {
-      expect(result.data).toEqual({ month: 3, day: 13, genre: null });
+      expect(result.data.storyId).toBe(validStoryId);
+      expect(result.data.bibleVersion).toBe('NABRE'); // default
     }
   });
 
-  it('accepts valid input with genre', () => {
-    const result = validateRequest({ month: 3, day: 13, genre: 'Strange Crimes' });
+  it('accepts valid storyId with valid bibleVersion', () => {
+    const result = validateRequest({ storyId: validStoryId, bibleVersion: 'NIV' });
     expect(result.valid).toBe(true);
     if (result.valid) {
-      expect(result.data).toEqual({ month: 3, day: 13, genre: 'Strange Crimes' });
+      expect(result.data.storyId).toBe(validStoryId);
+      expect(result.data.bibleVersion).toBe('NIV');
     }
   });
 
-  it('rejects invalid genre', () => {
-    const result = validateRequest({ month: 3, day: 13, genre: 'Not A Real Genre' });
+  it('accepts all supported Bible versions', () => {
+    const versions = ['NABRE', 'NIV', 'KJV', 'ESV', 'NLT', 'NKJV'];
+    for (const version of versions) {
+      const result = validateRequest({ storyId: validStoryId, bibleVersion: version });
+      expect(result.valid).toBe(true);
+      if (result.valid) {
+        expect(result.data.bibleVersion).toBe(version);
+      }
+    }
+  });
+
+  it('rejects invalid bibleVersion', () => {
+    const result = validateRequest({ storyId: validStoryId, bibleVersion: 'INVALID' });
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.error).toBe('Invalid genre');
+      expect(result.error).toContain('Invalid bibleVersion');
     }
   });
 
@@ -34,92 +50,92 @@ describe('validateRequest', () => {
     }
   });
 
-  it('rejects missing month', () => {
-    const result = validateRequest({ day: 1 });
+  it('rejects missing storyId', () => {
+    const result = validateRequest({});
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.error).toBe('month is required');
+      expect(result.error).toContain('storyId is required');
     }
   });
 
-  it('rejects missing day', () => {
-    const result = validateRequest({ month: 1 });
+  it('rejects non-string storyId', () => {
+    const result = validateRequest({ storyId: 123 });
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.error).toBe('day is required');
+      expect(result.error).toContain('storyId is required');
     }
   });
 
-  it('rejects month out of range (0)', () => {
-    const result = validateRequest({ month: 0, day: 1 });
+  it('rejects unknown storyId', () => {
+    const result = validateRequest({ storyId: 'not-a-real-story' });
     expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.error).toContain('Unknown storyId');
+    }
   });
 
-  it('rejects month out of range (13)', () => {
-    const result = validateRequest({ month: 13, day: 1 });
-    expect(result.valid).toBe(false);
-  });
-
-  it('rejects day out of range (0)', () => {
-    const result = validateRequest({ month: 1, day: 0 });
-    expect(result.valid).toBe(false);
-  });
-
-  it('rejects day out of range (32)', () => {
-    const result = validateRequest({ month: 1, day: 32 });
-    expect(result.valid).toBe(false);
-  });
-
-  it('rejects non-integer month', () => {
-    const result = validateRequest({ month: 1.5, day: 1 });
-    expect(result.valid).toBe(false);
-  });
-
-  it('accepts string numbers (coercion)', () => {
-    const result = validateRequest({ month: '6', day: '15' });
+  it('returns story title and scripture ref in validated data', () => {
+    const result = validateRequest({ storyId: validStoryId });
     expect(result.valid).toBe(true);
     if (result.valid) {
-      expect(result.data).toEqual({ month: 6, day: 15, genre: null });
+      expect(result.data.storyTitle).toBeTruthy();
+      expect(result.data.scriptureRef).toBeTruthy();
     }
   });
 
-  it('accepts boundary values', () => {
-    expect(validateRequest({ month: 1, day: 1 }).valid).toBe(true);
-    expect(validateRequest({ month: 12, day: 31 }).valid).toBe(true);
-  });
-});
-
-describe('monthName', () => {
-  it('returns correct month names', () => {
-    expect(monthName(1)).toBe('January');
-    expect(monthName(6)).toBe('June');
-    expect(monthName(12)).toBe('December');
+  it('defaults bibleVersion to NABRE when not provided', () => {
+    const result = validateRequest({ storyId: validStoryId });
+    expect(result.valid).toBe(true);
+    if (result.valid) {
+      expect(result.data.bibleVersion).toBe('NABRE');
+    }
   });
 
-  it('falls back to January for invalid input', () => {
-    expect(monthName(0)).toBe('January');
-    expect(monthName(13)).toBe('January');
+  it('defaults bibleVersion to NABRE when null', () => {
+    const result = validateRequest({ storyId: validStoryId, bibleVersion: null });
+    expect(result.valid).toBe(true);
+    if (result.valid) {
+      expect(result.data.bibleVersion).toBe('NABRE');
+    }
   });
 });
 
 describe('buildUserMessage', () => {
-  it('builds base message without genre', () => {
-    const msg = buildUserMessage(7, 4);
-    expect(msg).toContain('July 4');
-    expect(msg).not.toContain('GENRE LENS');
+  const sampleRequest: ValidatedStoryRequest = {
+    storyId: 'david-and-goliath',
+    storyTitle: 'David and Goliath',
+    scriptureRef: '1 Samuel 17:1-54',
+    bibleVersion: 'NABRE',
+  };
+
+  it('includes the story title', () => {
+    const msg = buildUserMessage(sampleRequest);
+    expect(msg).toContain('David and Goliath');
   });
 
-  it('includes genre instruction when genre provided', () => {
-    const msg = buildUserMessage(7, 4, 'True Crime');
-    expect(msg).toContain('July 4');
-    expect(msg).toContain('GENRE LENS');
-    expect(msg).toContain('True Crime');
+  it('includes the scripture reference', () => {
+    const msg = buildUserMessage(sampleRequest);
+    expect(msg).toContain('1 Samuel 17:1-54');
   });
 
-  it('includes storytelling guidance in genre instruction', () => {
-    const msg = buildUserMessage(3, 14, 'Espionage & Spies');
-    expect(msg).toContain('tone, pacing, and atmosphere');
-    expect(msg).toContain('sensory details');
-    expect(msg).toContain('historically accurate');
+  it('includes the Bible version', () => {
+    const msg = buildUserMessage(sampleRequest);
+    expect(msg).toContain('NABRE');
+  });
+
+  it('mentions second person retelling', () => {
+    const msg = buildUserMessage(sampleRequest);
+    expect(msg).toContain('second person');
+  });
+
+  it('requests footer citation verse', () => {
+    const msg = buildUserMessage(sampleRequest);
+    expect(msg).toContain('footer citation');
+  });
+
+  it('changes version text when different version used', () => {
+    const nivRequest = { ...sampleRequest, bibleVersion: 'NIV' as const };
+    const msg = buildUserMessage(nivRequest);
+    expect(msg).toContain('NIV');
   });
 });

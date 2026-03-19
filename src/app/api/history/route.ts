@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { validateRequest, buildUserMessage } from '@/lib/validation';
 import { rateLimit } from '@/lib/rateLimit';
-import { HISTORY_SYSTEM_PROMPT, VIGNETTE_TOOL, STORY_MODEL } from '@/lib/prompts';
+import { buildSystemPrompt, BIBLE_STORY_TOOL, STORY_MODEL } from '@/lib/prompts';
 
+/**
+ * Standalone Bible story endpoint (non-streaming).
+ * For cases where the client doesn't need the streaming pipeline.
+ */
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     || request.headers.get('x-real-ip')
@@ -21,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  const { month, day, genre } = result.data;
+  const { storyTitle, scriptureRef, bibleVersion } = result.data;
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -32,16 +36,15 @@ export async function POST(request: NextRequest) {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: STORY_MODEL,
-      max_tokens: 512,
-      system: HISTORY_SYSTEM_PROMPT,
-      tools: [VIGNETTE_TOOL],
-      tool_choice: { type: 'tool' as const, name: 'publish_vignette' },
+      max_tokens: 1024,
+      system: buildSystemPrompt(bibleVersion),
+      tools: [BIBLE_STORY_TOOL],
+      tool_choice: { type: 'tool' as const, name: 'publish_bible_story' },
       messages: [
-        { role: 'user', content: buildUserMessage(month, day, genre ?? undefined) }
+        { role: 'user', content: buildUserMessage(result.data) }
       ]
     });
 
-    // Extract tool use result
     const toolBlock = message.content.find(b => b.type === 'tool_use');
     if (!toolBlock || toolBlock.type !== 'tool_use') {
       throw new Error('No tool response received');
@@ -49,18 +52,21 @@ export async function POST(request: NextRequest) {
 
     const input = toolBlock.input as {
       story: string;
-      eventTitle: string;
-      eventYear: string;
-      mlaCitation: string;
+      title: string;
+      theme: string;
+      scriptureReference: string;
+      verseText: string;
+      moral: string;
     };
 
     return NextResponse.json({
       story: input.story,
-      eventTitle: input.eventTitle || null,
-      eventYear: input.eventYear || null,
-      mlaCitation: input.mlaCitation || null,
-      date: { month, day },
-      genre: genre || null
+      title: input.title || storyTitle,
+      theme: input.theme || null,
+      scriptureReference: input.scriptureReference || scriptureRef,
+      verseText: input.verseText || null,
+      moral: input.moral || null,
+      bibleVersion,
     });
   } catch (err: unknown) {
     const error = err as { status?: number; message?: string };

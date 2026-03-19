@@ -1,22 +1,23 @@
 import { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { validateRequest, buildUserMessage, monthName } from '@/lib/validation';
+import { validateRequest, buildUserMessage } from '@/lib/validation';
 import { rateLimit } from '@/lib/rateLimit';
-import { HISTORY_SYSTEM_PROMPT, VIGNETTE_TOOL, STORY_MODEL } from '@/lib/prompts';
+import { buildSystemPrompt, BIBLE_STORY_TOOL, STORY_MODEL } from '@/lib/prompts';
 
-const ELEVENLABS_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam
+const ELEVENLABS_VOICE_ID = 'oTQK6KgOJHp8UGGZjwUu'; // Moonlit narrator — warm bedtime voice
 const ELEVENLABS_MODEL = 'eleven_flash_v2_5'; // Fastest English model
-const BRANDING_OUTRO = 'This audio is created by This Moment in Strange History. Copyright 2026.';
+const BRANDING_OUTRO = 'This story is brought to you by This Moment in Biblical Times. Goodnight, and God bless.';
 
 /**
- * Unified streaming pipeline: story generation → TTS → NDJSON response.
+ * Unified streaming pipeline: Bible story generation → TTS → NDJSON response.
  *
  * Response format (newline-delimited JSON):
- *   {"type":"story", "story":"...", "eventTitle":"...", ...}\n
- *   {"type":"audio", "audio":"<base64>"}\n
+ *   {"type":"story", "story":"...", "title":"...", ...}\n
+ *   {"type":"audio", "audio":"<base64>", "alignment":{...}}\n
  *
  * The story line is flushed immediately so the client can display it
  * while TTS is still generating on the server (server-side overlap).
+ * The audio event includes character-level alignment data for follow-along highlighting.
  */
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: result.error }, { status: 400 });
   }
 
-  const { month, day, genre } = result.data;
+  const { storyId, storyTitle, scriptureRef, bibleVersion } = result.data;
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const elevenlabsKey = process.env.ELEVENLABS_API_KEY;
@@ -51,16 +52,16 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // ── Phase 1: Generate story with Claude Haiku 4.5 ──────────────
+        // ── Phase 1: Generate Bible story with Claude ──────────────
         const client = new Anthropic({ apiKey: anthropicKey });
         const message = await client.messages.create({
           model: STORY_MODEL,
-          max_tokens: 512,
-          system: HISTORY_SYSTEM_PROMPT,
-          tools: [VIGNETTE_TOOL],
-          tool_choice: { type: 'tool' as const, name: 'publish_vignette' },
+          max_tokens: 1024,
+          system: buildSystemPrompt(bibleVersion),
+          tools: [BIBLE_STORY_TOOL],
+          tool_choice: { type: 'tool' as const, name: 'publish_bible_story' },
           messages: [
-            { role: 'user', content: buildUserMessage(month, day, genre ?? undefined) }
+            { role: 'user', content: buildUserMessage(result.data) }
           ]
         });
 
@@ -71,40 +72,39 @@ export async function POST(request: NextRequest) {
 
         const input = toolBlock.input as {
           story: string;
-          eventTitle: string;
-          eventYear: string;
-          mlaCitation: string;
+          title: string;
+          theme: string;
+          scriptureReference: string;
+          verseText: string;
+          moral: string;
         };
 
         // Flush story data immediately — client can display while TTS generates
         controller.enqueue(encoder.encode(JSON.stringify({
           type: 'story',
           story: input.story,
-          eventTitle: input.eventTitle || null,
-          eventYear: input.eventYear || null,
-          mlaCitation: input.mlaCitation || null,
-          date: { month, day },
-          genre: genre || null,
-          // Token usage for cost estimation (Issue #2)
+          title: input.title || storyTitle,
+          theme: input.theme || null,
+          scriptureReference: input.scriptureReference || scriptureRef,
+          verseText: input.verseText || null,
+          moral: input.moral || null,
+          storyId,
+          bibleVersion,
+          // Token usage for cost estimation
           inputTokens: message.usage.input_tokens,
           outputTokens: message.usage.output_tokens,
         }) + '\n'));
 
         // ── Phase 2: Generate TTS with ElevenLabs Flash ────────────
-        const eventDate = `${monthName(month)} ${day}`;
         let outro = '\n\n';
-        if (input.eventTitle) outro += `${input.eventTitle}. `;
-        if (eventDate && input.eventYear) {
-          outro += `${eventDate}, ${input.eventYear}. `;
-        } else if (eventDate) {
-          outro += `${eventDate}. `;
-        }
+        if (input.title) outro += `${input.title}. `;
+        if (input.scriptureReference) outro += `${input.scriptureReference}. `;
         outro += `\n\n${BRANDING_OUTRO}`;
 
         const fullText = input.story + outro;
 
         const ttsResponse = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+          `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/with-timestamps`,
           {
             method: 'POST',
             headers: {
@@ -115,9 +115,9 @@ export async function POST(request: NextRequest) {
               text: fullText,
               model_id: ELEVENLABS_MODEL,
               voice_settings: {
-                stability: 0.5,
-                similarity_boost: 0.75,
-                style: 0,
+                stability: 0.6,
+                similarity_boost: 0.7,
+                style: 0.1,
               },
             }),
           }
@@ -129,15 +129,52 @@ export async function POST(request: NextRequest) {
           throw new Error('Failed to generate audio');
         }
 
-        const audioBuffer = await ttsResponse.arrayBuffer();
-        const base64Audio = Buffer.from(audioBuffer).toString('base64');
+        // Parse NDJSON chunks from with-timestamps endpoint:
+        // Each line is JSON with { audio_base64, alignment? }
+        // We accumulate audio buffers and merge alignment arrays.
+        const ttsBody = await ttsResponse.text();
+        const ttsLines = ttsBody.split('\n').filter(line => line.trim());
 
-        controller.enqueue(encoder.encode(JSON.stringify({
+        const audioChunks: Buffer[] = [];
+        const allCharacters: string[] = [];
+        const allStartTimes: number[] = [];
+        const allEndTimes: number[] = [];
+
+        for (const line of ttsLines) {
+          try {
+            const chunk = JSON.parse(line);
+            if (chunk.audio_base64) {
+              audioChunks.push(Buffer.from(chunk.audio_base64, 'base64'));
+            }
+            if (chunk.alignment) {
+              allCharacters.push(...(chunk.alignment.characters || []));
+              allStartTimes.push(...(chunk.alignment.character_start_times_seconds || []));
+              allEndTimes.push(...(chunk.alignment.character_end_times_seconds || []));
+            }
+          } catch {
+            // Skip malformed chunks
+          }
+        }
+
+        const combinedAudio = Buffer.concat(audioChunks);
+        const base64Audio = combinedAudio.toString('base64');
+
+        const audioEvent: Record<string, unknown> = {
           type: 'audio',
           audio: base64Audio,
-          // Character count for cost estimation (Issue #2)
           ttsCharacters: fullText.length,
-        }) + '\n'));
+        };
+
+        // Include alignment data if available (graceful degradation)
+        if (allCharacters.length > 0) {
+          audioEvent.alignment = {
+            characters: allCharacters,
+            character_start_times_seconds: allStartTimes,
+            character_end_times_seconds: allEndTimes,
+          };
+        }
+
+        controller.enqueue(encoder.encode(JSON.stringify(audioEvent) + '\n'));
 
       } catch (err: unknown) {
         const error = err as { status?: number; message?: string };

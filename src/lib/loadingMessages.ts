@@ -1,25 +1,25 @@
 /**
  * Themed loading messages for each pipeline phase.
  *
- * Phase 1 (story generation): eerie investigation / archive theme
- * Phase 2 (audio narration): paranormal / strange discovery theme
+ * Phase 1 (story generation): cozy bedtime / storybook theme
+ * Phase 2 (audio narration): gentle storyteller preparing theme
  */
 
 export const STORY_PHASE_MESSAGES = [
-  'Searching the forbidden archives...',
-  'Dusting off a classified file...',
-  'Decoding a strange manuscript...',
-  'Opening the vault of forgotten oddities...',
-  'Something stirs in the historical record...',
+  'Opening the storybook...',
+  'Finding tonight\u2019s story...',
+  'Turning to the right page...',
+  'The storyteller is getting ready...',
+  'Lighting the bedside lamp...',
 ];
 
 export const AUDIO_PHASE_MESSAGES = [
-  'The signal is coming through — brace yourself...',
-  'Tuning into a frequency from the past...',
-  'The recording device is picking something up...',
-  'A voice from another time is emerging...',
-  'The static is clearing — listen closely...',
-  'Something wants to be heard...',
+  'The storyteller clears their throat gently...',
+  'A warm voice begins to speak...',
+  'The narrator settles into the chair...',
+  'Soft music begins to play...',
+  'Getting the story just right for you...',
+  'Almost ready \u2014 close your eyes...',
 ];
 
 /** Pick a random element from a non-empty array. */

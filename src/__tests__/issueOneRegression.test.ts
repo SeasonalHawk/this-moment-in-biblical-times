@@ -69,17 +69,6 @@ describe('Bug 2 & 3: Legacy api/ directory removed', () => {
 });
 
 describe('STORY_MODEL single source of truth (Bug 2 guard)', () => {
-  it('App Router history route uses STORY_MODEL import', () => {
-    const routeSource = fs.readFileSync(
-      path.resolve(__dirname, '../app/api/history/route.ts'),
-      'utf-8'
-    );
-    expect(routeSource).toMatch(/import\s*\{[^}]*STORY_MODEL[^}]*\}\s*from\s*['"]@\/lib\/prompts['"]/);
-    expect(routeSource).toContain('model: STORY_MODEL');
-    // Must NOT hardcode any model string
-    expect(routeSource).not.toMatch(/model:\s*['"]claude-/);
-  });
-
   it('App Router pipeline route uses STORY_MODEL import', () => {
     const routeSource = fs.readFileSync(
       path.resolve(__dirname, '../app/api/pipeline/route.ts'),
@@ -87,6 +76,29 @@ describe('STORY_MODEL single source of truth (Bug 2 guard)', () => {
     );
     expect(routeSource).toMatch(/import\s*\{[^}]*STORY_MODEL[^}]*\}\s*from\s*['"]@\/lib\/prompts['"]/);
     expect(routeSource).toContain('model: STORY_MODEL');
+    // Must NOT hardcode any model string
     expect(routeSource).not.toMatch(/model:\s*['"]claude-/);
+  });
+});
+
+describe('Dead code cleanup', () => {
+  it('useHistoryStory.ts is deleted (replaced by useBibleStory)', () => {
+    const oldHookPath = path.resolve(__dirname, '../hooks/useHistoryStory.ts');
+    expect(fs.existsSync(oldHookPath)).toBe(false);
+  });
+
+  it('CalendarPicker.tsx is deleted', () => {
+    const calendarPath = path.resolve(__dirname, '../components/CalendarPicker.tsx');
+    expect(fs.existsSync(calendarPath)).toBe(false);
+  });
+
+  it('StoryCard.tsx is deleted (replaced by StoryPlayer)', () => {
+    const storyCardPath = path.resolve(__dirname, '../components/StoryCard.tsx');
+    expect(fs.existsSync(storyCardPath)).toBe(false);
+  });
+
+  it('genres.ts is deleted (replaced by bibleStories)', () => {
+    const genresPath = path.resolve(__dirname, '../lib/genres.ts');
+    expect(fs.existsSync(genresPath)).toBe(false);
   });
 });
